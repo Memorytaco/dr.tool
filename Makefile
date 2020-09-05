@@ -1,6 +1,6 @@
 SHELL=/bin/zsh
-dtool:
-	@clang dtool.c -l capstone -o dtool
+dtool: dtool.c main.c cmd.c
+	@clang main.c dtool.c cmd.c -Lcapstone -lcapstone -o dtool -Icapstone/include
 
 clean:
-	@rm *.o
+	@rm -f dtool
