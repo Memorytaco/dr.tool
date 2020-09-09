@@ -1,20 +1,26 @@
-#include <stdint.h>
-#include <stdbool.h>
-
 #ifndef ELF_HEADER
 #define ELF_HEADER  "0.0.1"
 
-typedef uint8_t octet;
+#include <stdint.h>
+#include <stdbool.h>
+
+
+/*
+  this elf interface is aimed at simple operation on elf file.
+  Such as Section content extract or symbol address calculate.
+  it will focus on the core operation on file format and you should
+  use other wrapper interface instead of using this one.
+*/
+
+typedef uint8_t  octet;
 typedef uint16_t word;
 typedef uint32_t dword;
 typedef uint64_t qword;
 
-typedef int8_t octet_s;
+typedef int8_t  octet_s;
 typedef int16_t word_s;
 typedef int32_t dword_s;
 typedef int64_t qword_s;
-
-#define 
 
 struct ELFHeader_32 {
   octet e_magic[16];  // magic info
@@ -104,15 +110,15 @@ static char MAGIC[4] = {0x7f, 'E', 'L', 'F'};
 #define ELFHEADER_TYPE_DYN  3 // shared file
 #define ELFHEADER_TYPE_CORE 4 // coredump file
 #define ELFHEADER_TYPE_NUM  5 // number of defined types
-#define ELFHEADER_TYPE_LOOS  0xFE00 // Environment specific use
+#define ELFHEADER_TYPE_LOOS  0xFE00   // Environment specific use
 #define ELFHEADER_TYPE_HIOS  0xFEFF
 #define ELFHEADER_TYPE_LOPROC 0xFF00  // processor-psecific use
 #define ELFHEADER_TYPE_HIPROC 0xFFFF
 
-#define ELFHEADER_MACHINE_386   3   // Intel 80386
-#define ELFHEADER_MACHINE_860   7   // Intel 80860
+#define ELFHEADER_MACHINE_386   3     // Intel 80386
+#define ELFHEADER_MACHINE_860   7     // Intel 80860
 #define ELFHEADER_MACHINE_AARCH64 183 // ARM AARCH64
-#define ELFHEADER_MACHINE_BPF   247 // Linux BPF
+#define ELFHEADER_MACHINE_BPF   247   // Linux BPF
 /* #define ELFHEADER_MACHINE */
 
 //////////////////////////////////////////////////////////////////
@@ -144,5 +150,56 @@ typedef struct ELF_SHDR_64 {
   qword sh_addralign;   // Section alignment
   qword sh_entsize;     // Entry size if section holds table
 } Shdr_64;
+
+//TODO:: Complete this type def;
+//////////////////////////////////////////////////////////////////
+//                Program Header and Entry                      //
+//////////////////////////////////////////////////////////////////
+typedef struct ELF_PHDR_32 {
+  dword p_type;
+  dword p_offset;
+  dword p_vaddr;
+  dword p_paddr;
+  dword p_memsz;
+  dword p_flags;
+  dword p_align;
+} Phdr_32;
+
+typedef struct ELF_PHDR_64 {
+
+} Phdr_64;
+
+
+//////////////////////////////////////////////////////////////////
+//                 Symbol Header and Entry                      //
+//////////////////////////////////////////////////////////////////
+typedef struct ELF_SYM_32 {
+
+} Sym_32;
+
+typedef struct ELF_SYM_64 {
+
+} Sym_64;
+
+
+
+//////////////////////////////////////////////////////////////////
+//                 Operation on ELF File                        //
+//////////////////////////////////////////////////////////////////
+
+/*
+  All interface will return -1 to indicate invalid format;
+  And return 0 to indicate invalid field value;
+*/
+
+bool isValidELFormat(void* memory);
+int getAbiClass(struct ELFHeader_Pre* hd);
+
+
+
+
+
+
+
 
 #endif
