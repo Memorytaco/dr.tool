@@ -1,4 +1,3 @@
-#include <capstone/capstone.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -9,65 +8,76 @@
 
 #include "cmd.h"
 #include "dtool.h"
+#include "elf.h"
+#include "disas.h"
+#include "util/file.h"
 
-void derror(FILE* s, const char* const msg, cs_err code)
-{
-  fprintf(s, "%s: %s\n", msg, cs_strerror(code));
+struct store {
+  char* file;
+  char* name;
+  bool syntax;
+};
+
+int cmd_call_help(struct cmdarg* arg, void* data, void* store) {
+  printf("Hello World, this is %s help option.\n", arg->opt & cmd_opt_long ? "long":"short");
+  return 0;
+}
+
+int cmd_call_file(struct cmdarg* arg, void* data, void* store) {
+  struct store* ptr = store;
+  ptr->file = arg->val;
+  printf("Specific file is %s\n", arg->val);
+  return 0;
+}
+
+int cmd_call_name(struct cmdarg* arg, void* data, void* store) {
+  struct store* ptr = store;
+  ptr->name = arg->val;
+  printf("Got a parser name %s\n", ptr->name);
+  return 0;
+}
+
+int cmd_call_syntax(struct cmdarg* arg, void* data, void* store) {
+  struct store* ptr = store;
+  ptr->syntax = true;
+  return 0;
 }
 
 int main(int argc, char** argv)
 {
-  csh handle = 0;
-  cs_err err = CS_ERR_OK;
-
   char *color = setcmd('m', 3, 38, 5, 153);
   char *endcmd = setcmd('m', 1, 0);
   if (argc < 2) {
-    printf("%sPlease specific a raw binary file%s\n", color, endcmd);
+    printf("%s%s {command} [option]%s\n", argv[0], color, endcmd);
     return 0;
   }
-  
-  err = cs_open(CS_ARCH_X86, CS_MODE_64, &handle);
-  if (err) {
-    derror(stderr, "CSOPENERROR", err);
-    return 1;
+
+  if (strcmp("disas", argv[1])) {
+    printf("disas is the only command.\n");
+    return 0;
   }
 
-  size_t size = 0;
-  char* filebuffer = readfile(argv[1], &size);
-  if (size == -1) {
-    free(color);
-    color = setcmd('m', 3, 38, 5, 38);
-    printf("%sError on file %s%s\n", color, endcmd, argv[1]);
-    return 1;
-  }
+  struct cmd_reg regs[] = {
+    { .code = 0, .arg = { .opt = cmd_opt_short | cmd_opt_toggle, .key = "h" }, .call = cmd_call_help },
+    { .code = 0, .arg = { .opt = cmd_opt_long | cmd_opt_toggle, .key = "help" }, .call = cmd_call_help },
+    { .code = 2, .arg = { .opt = cmd_opt_long, .key = "file" }, .call = cmd_call_file },
+    { .code = 3, .arg = { .opt = cmd_opt_long, .key = "name" }, .call = cmd_call_name },
+    { .code = 4, .arg = { .opt = cmd_opt_short | cmd_opt_toggle, .key = "att" }, .call = cmd_call_syntax},
+    { .code = -1, .call = NULL}
+  };
+  struct store* store = malloc(sizeof(struct store));
+  memset(store, 0, sizeof(struct store));
+  cmd_match(argc-2, argv+2, regs, store);
 
-  err = cs_option(handle, CS_OPT_SYNTAX, CS_OPT_SYNTAX_ATT);
-  if (err) {
-    derror(stderr, "SETTINGSYNTAX", err);
-    return 1;
-  }
-  printf("%s%s%s size: %zu:\n", color, argv[1], endcmd, size);
-  cs_insn *insn = NULL;
-  size = cs_disasm(handle, (unsigned char*)filebuffer, size, 0, 0, &insn);
-
-  if (size > 0) {
-    printf("Got %zu instructions\n", size);
-  } else {
-    derror(stderr, "DISASM", cs_errno(handle));
-    return 1;
-  }
-
-  size_t count = 0;
-  while (count < size)
-  {
-    cs_insn *val = insn + count;
-    printf("0x%08lx  %15s  %-20s => %d\n", val->address, val->mnemonic, val->op_str, val->size);
-    count ++;
-  }
-
-  cs_free(insn, size);
-  cs_close(&handle);
+  if (store->file) {
+    char* name = store->name;
+    if (!name) {
+      name = store->file;
+    }
+    size_t size=0;
+    char* buf = readfile(store->file, &size);
+    dt_disas(name, buf, size, store->syntax);
+  } else printf("Please specific file option\n");
 
   return 0;
 }
