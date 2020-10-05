@@ -61,7 +61,7 @@ void cmdargt_append_buffer(struct cmdargt *arg, void const * buffer, size_t size
 void cmdargt_append_string(struct cmdargt *arg, char* str);
 // idx is both the index and the returned value size.
 void* cmdargt_fetch_val(struct cmdargt const * arg, size_t *idx);
-inline struct cmdargt* cmdargt_fetch_arg(struct cmdargt const * arg, size_t idx);
+struct cmdargt* cmdargt_fetch_arg(struct cmdargt const * arg, size_t idx);
 size_t cmdargt_valength(struct cmdargt const * arg);
 
 struct cmdarglst {
