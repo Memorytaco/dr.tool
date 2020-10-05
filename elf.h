@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-
+#include <assert.h>
 
 /*
   this elf interface is aimed at simple operation on elf file.
@@ -17,10 +17,10 @@ typedef uint16_t word;
 typedef uint32_t dword;
 typedef uint64_t qword;
 
-typedef int8_t  octet_s;
-typedef int16_t word_s;
-typedef int32_t dword_s;
-typedef int64_t qword_s;
+typedef int8_t  octetx;
+typedef int16_t wordx;
+typedef int32_t dwordx;
+typedef int64_t qwordx;
 
 struct ELFHeader_32 {
   octet e_magic[16];  // magic info
@@ -151,6 +151,44 @@ typedef struct ELF_SHDR_64 {
   qword sh_entsize;     // Entry size if section holds table
 } Shdr_64;
 
+// Special Section Indexes
+#define SHDR_INDEX_UNDEF     0x00   // mean undefined section
+#define SHDR_INDEX_LORESERVE 0xff00
+#define SHDR_INDEX_LOPROC    0xff00
+#define SHDR_INDEX_HIPROC    0xff1f
+#define SHDR_INDEX_ABS       0xfff1
+#define SHDR_INDEX_COMMON    0xfff2
+#define SHDR_INDEX_HIRESERVE 0xffff
+
+// Section types
+// TODO: add description
+enum SHDR_TYPE {
+  SHTYPE_NULL = 0,
+  SHTYPE_PROGBITS,
+  SHTYPE_SYMTAB,
+  SHTYPE_STRTAB,
+  SHTYPE_RELA,
+  SHTYPE_HASH,
+  SHTYPE_DYNAMIC,
+  SHTYPE_NOTE,
+  SHTYPE_NOBITS,
+  SHTYPE_REL,
+  SHTYPE_SHLIB,
+  SHTYPE_DYNSYM,
+  SHTYPE_LOPROC = 0x70000000,
+  SHTYPE_HIPROC = 0x7fffffff,
+  SHTYPE_KIYSER = 0x80000000,
+  SHTYPE_HIUSER = 0xffffffff
+};
+
+// Section Flags
+enum SHDR_FLAG {
+  SHF_WRITE = 0x01,
+  SHF_ALLOC = 0x02,
+  SHF_EXECINSTR = 0x04,
+  SHF_MASKPROC = 0xf0000000
+};
+
 //TODO:: Complete this type def;
 //////////////////////////////////////////////////////////////////
 //                Program Header and Entry                      //
@@ -174,14 +212,73 @@ typedef struct ELF_PHDR_64 {
 //                 Symbol Header and Entry                      //
 //////////////////////////////////////////////////////////////////
 typedef struct ELF_SYM_32 {
-
+  dword st_name;    // index to symbol string table
+  dword st_value;   // value of symbol, meaning is depending on context
+  dword st_size;    // size of the symbol
+  octet st_info;    // symbol type and its binding attributes.
+  octet st_other;   // no meaning, hold 0.
+  word  st_shndx;   // relevant section index.
 } Sym_32;
 
 typedef struct ELF_SYM_64 {
-
+  dword st_name;    // Symbol name
+  octet st_info;    // Type and Binding attributes
+  octet st_other;   // Reserved, hold 0.
+  word  st_shndx;   // Section table index
+  qword st_value;   // Symbol value
+  qword st_size;    // Size of object  (e.g. common)
 } Sym_64;
 
+// symbol binding type
+enum ELFSYM_BIND {
+  STB_LOCAL = 0,
+  STB_GLOBAL = 1,
+  STB_WEAK = 2,
+  STB_LOPROC = 13,
+  STB_HIPROC = 15
+};
 
+// symbol type
+enum ELFSYM_TYPE {
+  STT_NOTYPE = 0,
+  STT_OBJECT,
+  STT_FUNC,
+  STT_SECTION,
+  STT_FILE,
+  STT_COMMON,
+  STT_TLS,
+  STT_NUM = 7,
+  STT_LOOS = 10,
+  STT_HIOS = 12,
+  STT_LOPROC = 13,
+  STT_HIPROC = 15
+};
+
+//////////////////////////////////////////////////////////////////
+//                      RELOCATION ENTRY                        //
+//////////////////////////////////////////////////////////////////
+
+typedef struct ELF_REL_32 {
+  dword r_offset;
+  dword r_info;
+} Rel_32;
+
+typedef struct ELF_REL_64 {
+  dword r_offset;
+  dword r_info;
+} Rel_64;
+
+typedef struct ELF_RELA_32 {
+  dword   r_offset;
+  dword   r_info;
+  dwordx  r_addend;
+} Rela_32;
+
+typedef struct EFL_RELA_64 {
+  dword   r_offset;
+  dword   r_info;
+  dwordx  r_addend;
+} Rela_64;
 
 //////////////////////////////////////////////////////////////////
 //                 Operation on ELF File                        //
@@ -192,12 +289,37 @@ typedef struct ELF_SYM_64 {
   And return 0 to indicate invalid field value;
 */
 
-bool isValidELFormat(void* memory);
-int getAbiClass(struct ELFHeader_Pre* hd);
+bool isELFormat(void* memory);
+int getABIClass(struct ELFHeader_Pre* hd);
+#define classchk(i) ((i)==32?true:(i)==64?true:false)
 
+char* const get_filetype_str(void* mem);
+char* const get_os_str(void *mem);
 
+union unihdr {
+  struct ELFHeader_32* hdr_32;
+  struct ELFHeader_64* hdr_64;
+};
 
+union unisechdr {
+  Shdr_32 *shdr_32;
+  Shdr_64 *shdr_64;
+};
 
+union uniseghdr {
+};
+
+struct sectbl {
+  int class;
+  int num;
+  struct section {
+    void *hdr;
+    void *sec;
+  } *ents;
+};
+
+struct sectbl build_sectbl(void* mem);
+void free_sectbl(struct sectbl *tb);
 
 
 

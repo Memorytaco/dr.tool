@@ -1,6 +1,6 @@
 SHELL=/bin/zsh
-dtool: dtool.c main.c cmd.c disas.o file.o Makefile
-	@clang main.c cmd.c file.o disas.o -lcapstone -o dtool -Icapstone/include
+dtool: dtool.c main.c cmd.o disas.o file.o elf.o Makefile *.h
+	${CC} -Wall -std=c17 main.c cmd.o file.o disas.o elf.o -lcapstone -o dtool -Icapstone/include
 
 cmd.o: cmd.c file.o
 
