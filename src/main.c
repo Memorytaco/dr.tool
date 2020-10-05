@@ -174,7 +174,7 @@ int main(int argc, char** argv)
     name = file;
   }
   size_t size=0;
-  char* buf = readfile(file, &size);
+  unsigned char* buf = (unsigned char*)readfile(file, &size);
   dt_disas(name, buf, size, store->syntax);
 
   return 0;
