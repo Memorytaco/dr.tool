@@ -6,7 +6,7 @@ void derror(FILE* s, const char* const msg, cs_err code)
 }
 
 // @syntax: true for ATT, false for Intel. Default is Intel.
-void dt_disas(char* name, char* filebuffer, size_t size, bool syntax)
+void dt_disas(char* name, unsigned char* filebuffer, size_t size, bool syntax)
 {
   // prepare commandline setting
   char *color = setcmd('m', 3, 38, 5, 153);
@@ -29,7 +29,7 @@ void dt_disas(char* name, char* filebuffer, size_t size, bool syntax)
   }
   printf("%s%s%s size: %zu:\n", color, name, endcmd, size);
   cs_insn *insn = NULL;
-  size = cs_disasm(handle, (unsigned char*)filebuffer, size, 0, 0, &insn);
+  size = cs_disasm(handle, filebuffer, size, 0, 0, &insn);
 
   if (size > 0) {
     printf("Got %zu instructions\n", size);
@@ -42,7 +42,7 @@ void dt_disas(char* name, char* filebuffer, size_t size, bool syntax)
   while (count < size)
   {
     cs_insn *val = insn + count;
-    printf("0x%08lx  %15s  %-20s => %d\n", val->address, val->mnemonic, val->op_str, val->size);
+    printf("0x%08lX  %15s  %-20s\n", val->address, val->mnemonic, val->op_str);
     count ++;
   }
 
