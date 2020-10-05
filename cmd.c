@@ -1,9 +1,9 @@
 #include "cmd.h"
-#include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
 #include <stdlib.h>
-#include <stdbool.h>
+#include <assert.h>
+#include <stdint.h>
 
 static const char* cmd_prefix = "\033[";
 
@@ -93,40 +93,6 @@ char* strnjoin(int num, ...)
   return buf;
 }
 
-enum match_res {
-  partial_match,
-  full_match,
-  null_match
-};
-
-// match "mat" with "src". partial or full match.
-// used to check short or long option.
-// is mat is longer than src then return null_match;
-static enum match_res match_str(char* src, char *mat)
-{
-  size_t srclen = strlen(src);
-  size_t matlen = strlen(mat);
-  size_t smallsz = srclen > matlen ? matlen : srclen;
-  enum match_res res = null_match;
-  for (int i = 0; i < smallsz; i++) {
-    if (src[i] != mat[i]) return res;
-  }
-  if (smallsz != srclen || smallsz != matlen)
-    if (smallsz == srclen)
-      res = null_match;
-    else
-      res = partial_match;
-  else
-    res = full_match;
-  return res;
-}
-
-static inline void set_val_opt(struct cmdarg* cmdarg, void* val, size_t len) {
-  cmdarg->opt |= cmd_opt_val;
-  cmdarg->val = val;
-  cmdarg->len = len;
-}
-
 // if find '=', return its position or return 0;
 static inline size_t search_eql_opt(char* arg, size_t len) {
   for (size_t i = 0; i<len; i++) {
@@ -135,108 +101,160 @@ static inline size_t search_eql_opt(char* arg, size_t len) {
   return 0;
 }
 
-// accept one command line string, and generate
-// struct cmd_arg structure from it.
-struct cmdarg* parse_arg(char* arg, bool* all_value)
-{
-  struct cmdarg* cmdarg = malloc(sizeof(struct cmdarg));
-  size_t arglen = strlen(arg);
-  memset(cmdarg, 0, sizeof(struct cmdarg));
+// accept one command line string.
+// pass @holder as NULL to generate a new option.
+// pass @valbool as true to indicate the string is value. it will be set.
+// pass @opt to accept cmd options.
+// '-' will be treated as a value
+// "--" will be treated a special key "--", and all the following
+//     command line arguments will be treated as value and
+//     appended to this argument value field.
+// some value will be inserted to an argument with key as null.
+static struct cmdargt* cmd_trans
+( char * const str
+, struct cmdargt *holder
+, enum cmdopt *opt
+, bool *valbool
+) {
+  struct cmdargt *ptr = holder;
+  if (ptr == NULL) {
+    // caller wants us to build brand new cmdarg.
+    ptr = malloc(sizeof(struct cmdargt));
+    memset(ptr, 0, sizeof(struct cmdargt));
+  }
+  // otherwise we append the value to its value field or
+  // generate new argument and append it.
 
-  if (*all_value) {
-    set_val_opt(cmdarg, arg, arglen);
-    return cmdarg;
+  *opt = cmd_opt_null;  // clear the option
+  // if be the value option
+  if (*valbool) {
+    // if so, just append it as the value
+    cmdargt_append_string(ptr, str);
+    *opt |= cmd_opt_val;
+    return ptr;
   }
 
   // check whether the first token is '-', distinguish it with value
-  if (arg[0] != '-') {
-    set_val_opt(cmdarg, arg, arglen);
-    return cmdarg;
+  if (str[0] != '-') {
+    cmdargt_append_string(ptr, str);
+    *opt |= cmd_opt_val;
+    return ptr;
   }
 
+  size_t arglen = strlen(str);
   // if only one character '-', it's a special value
   // which denotes standard input
   if (arglen == 1) {
-    set_val_opt(cmdarg, arg, 1);
-    return cmdarg;
+    cmdargt_append_string(ptr, str);
+    *opt |= cmd_opt_val;
+    return ptr;
+  }
+
+  // it is now an option, so take care of @ptr value.
+  if (holder != NULL) {
+    ptr->next = malloc(sizeof(struct cmdargt));
+    ptr = ptr->next;
+    memset(ptr, 0, sizeof(struct cmdargt));
   }
 
   // now the arglen >= 2
-  if (arg[1] == '-') {
+  if (str[1] == '-') {
     // if its length is only 2, then it is "--"
     // which should denote a special seperation
-    // between value and option. return it;
+    // between value and option. return it as a special option;
+    // with key == "--"
     if (arglen == 2) {
-      *all_value = true;
-      cmdarg->opt |= cmd_opt_seperate;
-      cmdarg->key = cmdarg->val = arg;
-      cmdarg->len = 2;
-      return cmdarg;
+      *valbool = true;
+      *opt |= cmd_opt_seperate;
+      ptr->key = malloc(3);
+      memmove(ptr->key, str, 3);
+      return ptr;
     }
 
-    // if not, check equal sign "=", it is long option now
-    size_t posi = search_eql_opt(arg, arglen);
-    cmdarg->opt |= cmd_opt_long;
+    // if not, check equal sign "=", it is long option now.
+    size_t posi = search_eql_opt(str, arglen);
+    *opt |= cmd_opt_long;
 
     if (posi) {
-      // Got a index of '='
-      cmdarg->opt |= cmd_opt_withequ;
-      cmdarg->key = arg+2;  // the key may be an empty string ""
-      // something like "--=value" => "--\0value"
-      arg[posi] = 0;  // here, it change '=' to 0, make key unique string
-      bool islast = posi == arglen - 1;
-      cmdarg->val = islast ? "" : arg+posi+1;
-      cmdarg->len = islast ? 0 : strlen(cmdarg->val);
+      // Got an index of '='
+      *opt |= cmd_opt_withequ;
+
+      assert(posi >= 2);
+      // the key will never be empty string.
+      if (posi == 2) {
+        // contain key as "="
+        ptr->key = malloc(posi);
+        *(ptr->key+0) = '=';
+        *(ptr->key+1) = 0;
+      } else {
+        // normal key
+        // posi
+        //  +1 ==> translate it to length
+        //  -3 ==> remove two '-' and one '='
+        //  +1 ==> add the '\0' space.
+        //  final length is posi - 1;
+        ptr->key = malloc(posi-1);
+        // start at str+2, and length which doesn't include '\0'
+        memmove(ptr->key, str+2, posi-2);
+        *(ptr->key+posi-2) = 0; // set the last one to zero.
+      }
+      // something like "--=value" will get "=" as key and "value" as value
+      // if got "--=", then key as "=" and value NULL.
+      if (posi < arglen-1) cmdargt_append_string(ptr, str+posi+1);
     } else {
       // doesn't find '=', so it is an option
-      cmdarg->key = arg+2;  // point to the value without "--"
+      ptr->key = malloc(arglen-1);
+      memmove(ptr->key, str+2, arglen-1);
+      *(ptr->key+arglen-2) = 0;
     }
-    return cmdarg;
+    return ptr;
   }
 
-  // now it could only be short option
-  cmdarg->opt |= cmd_opt_short;
-  cmdarg->key = arg+1;
-  return cmdarg;
+  // now it could only be short option.
+  // it doesn't process the argument for the short
+  // option because it known nothing about available
+  // option requirement.
+  // Further Processing is required.
+  *opt |= cmd_opt_short;
+  ptr->key = malloc(arglen);
+  memmove(ptr->key, str+1, arglen);
+  *(ptr->key+arglen-1) = 0;
+  return ptr;
 }
 
-// search available register using cmdarg as indicator.
-// partial core logic here.
-// core logic 1.
-struct cmd_reg* cmd_search(struct cmdarg* cmdarg, struct cmd_reg* reg, size_t *posi)
+// macth the longest option
+struct cmdregt* cmd_search(char const * key, enum cmdopt opt, struct cmdregt* regs)
 {
-  struct cmd_reg *ptr = reg;
-  enum match_res res = null_match;
-  struct cmd_reg *regres = NULL;
-  for (ptr = reg; ptr->call != NULL; ptr++) {
-    // check option type of cmdarg and ptr
-    // only continue when they match.
-    static enum cmdopt selector = (cmd_opt_short | cmd_opt_long);
-    if (!(selector & cmdarg->opt & ptr->arg.opt)) continue;
-    // after the type check, do the job
-    switch (match_str(cmdarg->key, ptr->arg.key)) {
-      case partial_match:
-        // long option has no meaning when partial match
-        // you can't distinguish pure long option --hellonice
-        // and the option --hello with suffix value nice.
-        // so, jump.
-        if (cmdarg->opt & cmd_opt_long) continue;
-        // if it's a short option. then something
-        // -fhello.c is valid. and so is -WIall.
-        // but if the short option is two characters, then we can't
-        // distinguish between -hl and -h with an 'l' prefix value.
-        *posi = strlen(ptr->arg.key);
-        cmdarg->val = cmdarg->key + (*posi);
-        cmdarg->len = *posi;
-        return ptr;
-      case full_match:
-        *posi = 0;
-        return ptr;
-      default:
-        ; // do nothing
+  struct cmdregt *toret = NULL;
+  size_t srclen = strlen(key);
+  for ( int i = 0; (regs+i)->call != NULL
+      && (regs+i)->code != 0; i++)
+  {
+    char const * dststr = (regs+i)->key;
+    size_t dstlen = strlen(dststr);
+    if (dstlen > srclen) continue;
+    if (!strncmp(dststr, key, dstlen)) {
+      // filter the long and short option
+      // so -A and -AAA will not compared to --AAA or --A
+      if (!(opt & cmdopt_allopt & (regs+i)->opt)) continue;
+      if (toret) {
+        size_t rlen = strlen(toret->key);
+        // here the < or <= matters.
+        // if choose '<', then latter keys will not override
+        //    previous one
+        // otherwise choose '<=' and it will.
+#ifdef OPTIONOVERRIDE
+        if (rlen <= dstlen)
+#else
+        if (rlen < dstlen)
+#endif
+        {
+          toret = regs+i;
+        }
+      } else toret = regs+i;
     }
   }
-  return NULL;
+  return toret;
 }
 
 // TODO: complete its logic
@@ -244,7 +262,8 @@ struct cmd_reg* cmd_search(struct cmdarg* cmdarg, struct cmd_reg* reg, size_t *p
   do full match first logic:
     if i got two short option -A and -AAA.
     and input value is '-AAA', match it with -AAA instead of
-    the -A with value 'AA'.
+    the -A with value 'AA'. because -A option with value AA
+    can be achieved by "-A AA". You can't do that for -AAA.
   do aggregate boolean short option parse:
     if i defined four short boolean option -a, -b, -c, -d.
     and user input "-abcd", parse it as four boolean options.
@@ -256,65 +275,367 @@ struct cmd_reg* cmd_search(struct cmdarg* cmdarg, struct cmd_reg* reg, size_t *p
     it immediately and return a queriable structure.
 */
 // core logic 2.
-void cmd_match(int argc, char** argv, struct cmd_reg* table, void* store)
-{
-  struct cmdarg* cmdargs[argc];
-  bool allvalue = false;  // indicator of "--"
-  for (int i=0; i<argc; i++) {
-    cmdargs[i] = parse_arg(argv[i], &allvalue);
+struct cmdarglst* cmd_match
+( int argc, char** argv
+, struct cmdregt* regs
+, void* store
+) {
+  if (argc <= 0) return NULL;
+  bool valbool = false; // indicator of "--"
+  enum cmdopt opt = cmd_opt_null;
+  struct cmdargt *head = NULL, *ptr = NULL;
+
+  // prepare the header
+  struct cmdlst *list = NULL, *listhdr = NULL;
+  // start processing char** and transfer it to cmdargt one by one
+  for (int idx = 0; idx < argc; idx++) {
+    // transform the arguments and assign the address to @ptr
+#define iter(v) cmd_trans(argv[idx], v, &opt, &valbool)
+#define idx_guard(v) if (idx + 1 >= argc) {\
+  printf("required one value for \"%s\", but no more arguments.\n", (v)->key);\
+  exit(-1);\
   }
-  size_t posi = 0;
-  struct cmd_reg* reg = NULL;
-  for (int i=0; i<argc; i++) {
-    // precheck if it is a value option
-    if (cmdargs[i]->opt & cmd_opt_val) {
-      printf("Got Value Cmd %s\n", cmdargs[i]->val);
-      continue;
-    }
-    reg = cmd_search(cmdargs[i], table, &posi);
-    // reg NULL guard
-    if (!reg) {
-      printf("UnRecognized Option %s\n", cmdargs[i]->key);
-      continue;
-    }
-    // first handle long option
-    if (reg->arg.opt & cmd_opt_long) {
-      if ((reg->arg.opt & cmd_opt_toggle) || cmdargs[i]->val) {
-        reg->call(cmdargs[i], NULL, store);
-        continue;
-      }
-      if (i == argc - 1) {
-        printf("Invalid long option: --%s, need one value\n", cmdargs[i]->key);
-        continue;
-      }
-      if (cmdargs[i+1]->opt & cmd_opt_val) {
-        i++;
-        cmdargs[i-1]->val = cmdargs[i]->val;
-        cmdargs[i-1]->len = cmdargs[i]->len;
-        reg->call(cmdargs[i-1], NULL, store);
-        continue;
-      }
-      printf("Invalid value, Expect value for '--%s', but got option %s\n", cmdargs[i]->key, cmdargs[i+1]->key);
+    struct cmdargt *tmp = NULL;
+    if (ptr == NULL) {
+      tmp = iter(NULL);
+    } else if (ptr->key == NULL || !strcmp(ptr->key, "--")) {
+      tmp = iter(ptr);
     } else {
-      // now we handle short option
-      if ((reg->arg.opt & cmd_opt_toggle) || cmdargs[i]->val) {
-        reg->call(cmdargs[i], NULL, store);
-        continue;
+      tmp = iter(NULL);
+      ptr->next = tmp;
+      ptr = tmp;
+    }
+    // allocate header if idx is 0;
+    if (idx == 0) head = ptr = tmp;
+    // if valbool is true, then ptr->key should be "--"
+    if (valbool || opt & cmd_opt_val) {
+      if (valbool)
+        assert(!strncmp("--", ptr->key, 2) && tmp == ptr);
+      continue;
+    }
+    
+    /* now it will be long or short option */
+    // search registry first
+    ptr = tmp;  // pointer should always point to the last one
+    struct cmdregt *founded = cmd_search(ptr->key, opt, regs);
+    if (founded == NULL) {
+      printf("Error, Unrecognized Option %s\n", ptr->key);
+      exit(1);
+    }
+
+    if (list == NULL) {
+      listhdr = list = cmdlst_alloc();
+    } else {
+      listhdr->next = cmdlst_alloc();
+      listhdr = listhdr->next;
+    }
+
+    listhdr->reg = founded;
+    listhdr->arg = ptr;
+    listhdr->next = NULL;
+
+    // handle long option first
+    if (opt & cmd_opt_long) {
+      if (opt & cmd_opt_withequ) continue;
+      if (founded->opt & cmd_opt_toggle) continue;
+      idx_guard(founded);  // make sure idx not exceed argc
+      idx++;
+      tmp = iter(ptr);
+      if (tmp != ptr) {
+        // the new value is an option and not a value.
+        printf("expected one value for %s, but got option %s\n", ptr->key, tmp->key);
+        exit(1);
       }
-      // this option will need further value
-      if (i == argc - 1) {
-        printf("Invalid short option: -%s, need one value\n", cmdargs[i]->key);
-        continue;
-      }
-      if (cmdargs[i+1]->opt & cmd_opt_val) {
-        i++;
-        cmdargs[i-1]->val = cmdargs[i]->val;
-        cmdargs[i-1]->len = cmdargs[i]->len;
-        reg->call(cmdargs[i-1], NULL, store);
-        continue;
-      }
-      printf("Invalid value, Expect value for '-%s', but got option %s\n", cmdargs[i]->key, cmdargs[i+1]->key);
+      continue;
+    }
+    // handle short option here
+    size_t valindx = strlen(founded->key);
+    if (strlen(ptr->key) > valindx) {
+      char *key = malloc(valindx+1);
+      memmove(key, ptr->key, valindx+1);
+      key[valindx] = 0;
+      cmdargt_append_string(ptr, ptr->key + valindx);
+      free(ptr->key);
+      ptr->key = key;
+    }
+    // if toggle, don't need any more operation
+    if (founded->opt & cmd_opt_toggle) continue;
+    if (cmdargt_valength(ptr) > 0) continue;
+    idx_guard(founded);  // make sure idx not exceed argc
+    idx++;
+    tmp = iter(ptr);
+    if (tmp != ptr) {
+      printf("expected one value for %s, but got option %s\n", ptr->key, tmp->key);
+      exit(1);
     }
   }
-  return ;
+#undef iter
+#undef idx_guard
+
+  /* printf("Total Got %zu commands\n", cmdlst_length(list)); */
+  struct cmdarglst *lst = cmdargt_collect(head, argc);
+  cmdlst_chk(&list, regs);
+  cmdlst_call(list, lst, store);
+  return lst;
 }
+
+/////////////////////////////////
+// cmdargt structure operation //
+/////////////////////////////////
+
+// free all things.
+void cmdargt_free(struct cmdargt *arg)
+{
+  for (struct cmdargt *ptr = arg; ptr != NULL;) {
+    arg = arg->next;
+    for (struct valink *lnk = ptr->valist; lnk != NULL;) {
+      struct valink *next = lnk->next;
+      free(lnk->val);
+      free(lnk);
+      lnk = next;
+    }
+    free(ptr);  // ptr is also an mllocated value
+    ptr = arg;
+  }
+}
+
+size_t cmdargt_valength(struct cmdargt const * arg)
+{
+  if (arg->valist == NULL) return 0;
+  size_t length = 0;
+  for (struct valink *ptr = arg->valist; ptr != NULL; ptr = ptr->next) 
+    length ++;
+  return length;
+}
+
+void cmdargt_append_buffer(struct cmdargt *arg, void const * buffer, size_t size)
+{
+  struct valink **ptr = &(arg->valist);
+
+  // find the last pointer;
+  while (*ptr != NULL) ptr = &((*ptr)->next);
+
+  // allocate the structure memory
+  *ptr = malloc(sizeof(struct valink));
+  memset(*ptr, 0, sizeof(struct valink));
+
+  // allocate buffer memory, copy it;
+  (*ptr)->val = malloc(size);
+  memset((*ptr)->val, 0, size);
+  memmove((*ptr)->val, buffer, size);
+  (*ptr)->size = size;
+  (*ptr)->next = NULL;
+}
+
+void cmdargt_append_string(struct cmdargt *arg, char* str) {
+  size_t len = strlen(str); // size without \0
+  cmdargt_append_buffer(arg, str, len + 1); // here add the \0
+}
+
+// idx is both the index and the returned value size.
+void* cmdargt_fetch_val(struct cmdargt const * arg, size_t *idx)
+{
+  struct valink *ptr = arg->valist;
+  if (*idx >= cmdargt_valength(arg)) {
+    *idx = 0;
+    return NULL;
+  }
+  for (; *idx > 0; *idx -= 1) ptr = ptr->next;
+  *idx = ptr->size;
+  return ptr->val;
+}
+
+// get the indexed argument. simple as inline.
+inline struct cmdargt* cmdargt_fetch_arg(struct cmdargt const * arg, size_t idx) {
+  for (; arg != NULL && idx > 0; arg = arg->next, idx-=1)
+    ;
+  return (struct cmdargt*)arg;
+}
+
+// allocate memory and collect all unused argument value into
+// a single structure.
+struct cmdarglst* cmdargt_collect(struct cmdargt *arg, size_t cap)
+{
+  struct cmdarglst *toret = malloc(sizeof(struct cmdarglst));
+  size_t num = 0;
+  struct cmdargt *ptr = arg;
+  toret->argv = malloc(cap+1);
+  memset(toret->argv, 0, cap+1);
+  for (; ptr != NULL; ptr = ptr->next) {
+    if (ptr -> key == NULL || !strcmp(ptr->key, "--")) {
+      size_t length = cmdargt_valength(ptr);
+#ifdef CMDUBUG
+      printf("Got value Length %zd\n", length);
+#endif
+      size_t i = 0;
+      for (; i < length; i++) {
+        size_t idx = i;
+        toret->argv[num+i] = cmdargt_fetch_val(ptr, &idx);
+#ifdef CMDUBUG
+        printf("The value is \"%s\", length %zd.\n", toret->argv[num+i], idx);
+#endif
+      }
+      num += i;
+    }
+  }
+  toret->argc = num;
+  return toret;
+}
+
+/////////////////////////////////
+// callist structure operation //
+/////////////////////////////////
+
+struct cmdlst * cmdlst_alloc() {
+  struct cmdlst *lst = malloc(sizeof(struct cmdlst));
+  memset(lst, 0, sizeof(struct cmdlst));
+  return lst;
+}
+void cmdlst_free(struct cmdlst *lst) {
+  for (struct cmdlst *ptr = lst; ptr != NULL; ptr = lst) {
+    lst = lst->next;
+    free(ptr);
+  }
+}
+size_t cmdlst_length(struct cmdlst const * lst) {
+  size_t len = 0;
+  for (; lst != NULL; lst = lst->next) len++;
+  return len;
+}
+struct cmdlst * cmdlst_get(struct cmdlst *hdr, size_t idx)
+{
+  size_t len = cmdlst_length(hdr);
+  if (idx >= len) return NULL;
+  for (; idx > 0; idx--) {
+    hdr = hdr->next;
+  }
+  return hdr;
+}
+size_t cmdlst_insert(struct cmdlst **hdr, size_t idx, struct cmdlst *ptr)
+{
+  size_t len = cmdlst_length(*hdr);
+  struct cmdlst *anchor = NULL;
+  if (idx >= len) {
+    anchor = cmdlst_get(*hdr, len-1);
+    anchor->next = ptr;
+    return len;
+  } else if (idx == 0) {
+    ptr->next = *hdr;
+    *hdr = ptr;
+    return 0;
+  } else {
+    anchor = cmdlst_get(*hdr, idx-1);
+    ptr->next = anchor->next;
+    anchor->next = ptr;
+    return idx;
+  }
+}
+
+struct cmdlst * cmdlst_remove(struct cmdlst **hdr, size_t idx)
+{
+  size_t len = cmdlst_length(*hdr);
+  if (idx >= len) return NULL;
+  struct cmdlst *ptr = *hdr;
+  if (idx == 0) {
+    *hdr = ptr->next;
+    ptr->next = NULL;
+    return ptr;
+  }
+  ptr = cmdlst_get(*hdr, idx-1);
+  struct cmdlst *lptr = ptr->next;
+  ptr->next = lptr->next;
+  lptr->next = NULL;
+  return lptr;
+}
+
+int cmdlst_move(struct cmdlst **hdr, size_t idx1, size_t idx2)
+{
+  struct cmdlst* ptr = cmdlst_remove(hdr, idx1);
+  if (ptr == NULL) return -1;
+  return cmdlst_insert(hdr, idx2, ptr);
+}
+
+struct cmdlst * cmdlst_search(struct cmdlst *hdr, size_t code, size_t *index)
+{
+  size_t i = 0;
+  for (; hdr!= NULL; hdr = hdr->next) {
+    if (hdr->reg->code == code) {
+      if (index) *index = i;
+      return hdr;
+    }
+    i++;
+  }
+  if (index) *index = 0;
+  return NULL;
+}
+
+size_t cmdlst_reverse_get(struct cmdlst *hdr, struct cmdlst *ptr)
+{
+  for (size_t i = 0; hdr!=NULL; hdr = hdr->next, i++) {
+    if (hdr == ptr) return i;
+  }
+  return 0;
+}
+
+/* static bool cmdlst_dep_chk(struct cmdlst *hdr, struct cmdlst *ptr) */
+
+// TODO
+bool cmdlst_chk(struct cmdlst **hdr, struct cmdregt* regs)
+{
+  struct cmdlst *ptr = *hdr;
+  size_t listlength = cmdlst_length(*hdr);
+  size_t array[listlength];
+  for (int i=0; i<listlength; i++, ptr=ptr->next)
+    array[i] = ptr->reg->code;
+
+  // check option field
+  for (int i = 0; i < listlength; i++) {
+    size_t ptridx = 0;
+    ptr = cmdlst_search(*hdr, array[i], &ptridx);
+    struct cmdept* dpt = &ptr->reg->dep;
+    for (int j = 0; dpt->opt[j] != 0; j++) {
+      size_t fwdidx = 0;
+      struct cmdlst *fwd = NULL;
+optional:
+      fwd = cmdlst_search(ptr, dpt->opt[j], &fwdidx);
+      fwdidx += cmdlst_reverse_get(*hdr, ptr);
+      if (fwd == NULL) continue;
+      cmdlst_move(hdr, fwdidx, ptridx>0?ptridx-1:0);
+      goto optional;
+    }
+  }
+  // check requird field
+  for (int i = 0; i < listlength; i++) {
+    size_t ptridx = 0;
+    ptr = cmdlst_search(*hdr, array[i], &ptridx);
+    struct cmdept* dpt = &ptr->reg->dep;
+    for (int j = 0; dpt->req[j] != 0; j++) {
+      size_t fwdidx = 0;
+      struct cmdlst *fwd = NULL;
+required:
+      fwd = cmdlst_search(ptr, dpt->req[j], &fwdidx);
+      fwdidx += cmdlst_reverse_get(*hdr, ptr);
+      if (fwd == NULL) {
+        if (cmdlst_search(*hdr, dpt->req[j], NULL)) continue;
+        int i = 0;
+        for (; (regs+i)->code != 0 ; i++) {
+          if ((regs+i)->code != dpt->req[j])
+            break;
+        }
+        printf("Error: Lack option %s for %s\n", (regs+i)->key, ptr->reg->key);
+        exit(-1);
+      }
+      cmdlst_move(hdr, fwdidx, ptridx>0?ptridx-1:0);
+      goto required;
+    }
+  }
+  return true;
+}
+
+void cmdlst_call(struct cmdlst *hdr, struct cmdarglst *lst, void* store)
+{
+  for (; hdr != NULL; hdr = hdr->next) {
+    hdr->reg->call(hdr->arg, lst, store);
+  }
+}
+
