@@ -55,6 +55,7 @@ struct sectbl build_sectbl(void* mem)
   struct sectbl table = {
     .class  = getABIClass(mem),
     .num    = 0,
+    .name   = 0,
     .ents   = NULL
   };
   union unihdr hdr = {mem};
@@ -65,14 +66,16 @@ struct sectbl build_sectbl(void* mem)
 
   if (table.class == 32) {
     table.num = hdr.hdr_32->e_shnum;
+    table.name = hdr.hdr_32->e_shstrndx;
     entry_offset = hdr.hdr_32->e_shoff;
     entry_size = hdr.hdr_32->e_shentsize;
   } else if (table.class == 64) {
     table.num = hdr.hdr_64->e_shnum;
+    table.name = hdr.hdr_64->e_shstrndx;
     entry_offset = hdr.hdr_64->e_shoff;
     entry_size = hdr.hdr_64->e_shentsize;
   } else {
-    table.num = -1;
+    table.num = 0;
     return table;
   }
 
@@ -90,12 +93,11 @@ struct sectbl build_sectbl(void* mem)
     sections[i].hdr = buffer;
     // now prepare the section data;
     buffer = NULL;
+    sechdr.all = sections[i].hdr;
     if (table.class == 32) {
-      sechdr.shdr_32 = (Shdr_32*)sections[i].hdr;
       sh_size = sechdr.shdr_32->sh_size;
       sh_offset = sechdr.shdr_32->sh_offset;
     } else {
-      sechdr.shdr_64 = (Shdr_64*)sections[i].hdr;
       sh_size = sechdr.shdr_64->sh_size;
       sh_offset = sechdr.shdr_64->sh_offset;
     }
@@ -116,7 +118,21 @@ void free_sectbl(struct sectbl *tb)
     free(tb->ents[i].sec);
   }
   free(tb->ents);
+  tb->name = 0;
   tb->num = -1;
   tb->ents = NULL;
   return;
+}
+
+char const* sectbl_getname(struct sectbl const tb, size_t idx)
+{
+  const char* toret = "null";
+  union unisechdr hdr;
+  hdr.all = tb.ents[idx].hdr;
+  if (tb.name == 0) return toret;
+  if (tb.class == 32)
+    toret = tb.ents[tb.name].sec + hdr.shdr_32->sh_name;
+  else
+    toret = tb.ents[tb.name].sec + hdr.shdr_64->sh_name;
+  return toret;
 }
