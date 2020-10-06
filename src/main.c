@@ -58,21 +58,22 @@ void show_ascii(unsigned char* buf, size_t sz)
 }
 
 void show_hex(unsigned char* buf, int num, int length) {
-  int anchor = 0;
-  printf("0x%08X ", 0);
-  for (int i = 0; i < length; i++) {
-    if (i != 0 && i%num == 0) {
+  int anchor = 0, i = 0;
+  do {
+    if (i%num == 0) printf("0x%08X ", i);
+    if (i%4 == 3) {
+      printf("%02X ", buf[i]);
+    } else {
+      printf("%02X", buf[i]);
+    }
+    if (i%num == num-1) {
       printf("   ");
       show_ascii(buf+anchor, num);
       printf("\n");
-      printf("0x%08X ", i);
-      anchor = i;
+      anchor = i+1;
     }
-    if (i%4 == 3)
-      printf("%02X ", buf[i]);
-    else
-      printf("%02X", buf[i]);
-  }
+  } while (++i<length);
+
   if (length%num != 0) {
     size_t len = length - anchor;
     len = num*2 + (num/4) + 3 - len * 2 - len/4;
