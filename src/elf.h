@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <assert.h>
+#include <stddef.h>
 
 /*
   this elf interface is aimed at simple operation on elf file.
@@ -297,21 +298,25 @@ char* const get_filetype_str(void* mem);
 char* const get_os_str(void *mem);
 
 union unihdr {
+  void *all;
   struct ELFHeader_32* hdr_32;
   struct ELFHeader_64* hdr_64;
 };
 
 union unisechdr {
+  void *all;
   Shdr_32 *shdr_32;
   Shdr_64 *shdr_64;
 };
 
 union uniseghdr {
+  void *all;
 };
 
 struct sectbl {
   int class;
   int num;
+  size_t name;
   struct section {
     void *hdr;
     void *sec;
@@ -320,7 +325,7 @@ struct sectbl {
 
 struct sectbl build_sectbl(void* mem);
 void free_sectbl(struct sectbl *tb);
-
+char const* sectbl_getname(struct sectbl const tb, size_t idx);
 
 
 
