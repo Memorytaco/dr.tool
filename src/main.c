@@ -47,11 +47,11 @@ void cmd_call_setascii(struct cmdargt* arg, void* data, void* store) {
   ptr->ascii = true;
 }
 
-void show_ascii(unsigned char* buf, size_t offset, size_t sz)
+void show_ascii(unsigned char* buf, size_t sz)
 {
   for (size_t i = 0; i<sz; i++) {
-    if (isgraph(buf[i+offset]))
-      printf("%c", buf[i+offset]);
+    if (isgraph(buf[i]))
+      printf("%c", buf[i]);
     else
       printf(".");
   }
@@ -61,9 +61,9 @@ void show_hex(unsigned char* buf, int num, int length) {
   int anchor = 0;
   printf("0x%08X ", 0);
   for (int i = 0; i < length; i++) {
-    if (i%num == 0 && i != 0) {
+    if (i != 0 && i%num == 0) {
       printf("   ");
-      show_ascii(buf, anchor, num);
+      show_ascii(buf+anchor, num);
       printf("\n");
       printf("0x%08X ", i);
       anchor = i;
@@ -76,12 +76,12 @@ void show_hex(unsigned char* buf, int num, int length) {
   if (length%num != 0) {
     size_t len = length - anchor;
     len = num*2 + (num/4) + 3 - len * 2 - len/4;
-    unsigned char *buf = malloc(len);
-    memset(buf, ' ', len);
-    printf("%s", buf);
-    show_ascii(buf, anchor, length - anchor);
+    unsigned char *spaces = malloc(len);
+    memset(spaces, ' ', len);
+    printf("%s", spaces);
+    show_ascii(buf+anchor, length - anchor);
     printf("\n");
-    free(buf);
+    free(spaces);
   }
 }
 
@@ -114,6 +114,7 @@ void cmd_call_elfsec
     return;
   }
   if (ptr->ascii) {
+    printf("%s: %zd | %08zX\n", sectbl_getname(table, index), size, size);
     show_hex(table.ents[index].sec, 16, size);
   } else {
     fwrite(table.ents[index].sec, 1, size, stdout);
