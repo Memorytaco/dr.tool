@@ -27,8 +27,9 @@ char* strnjoin(int num, ...);
 // define command line user interface.
 /*
   principle:
-    1. scalar option is alwayse getting first match
-    2. full match prioritizes partial match
+    1. scalar option is alwayse getting first match result
+    2. full match prioritizes partial match, longest match,
+       in other words.
 */
 enum cmdopt {
   cmd_opt_null     = 0x0000,   // means it is an empty option
@@ -179,5 +180,22 @@ struct cmdarglst* cmd_match(int argc, char** argv, struct cmdregt* regs, void* s
 /*
   mechanism here.
 */
+
+// TODO: provide a handy interface for user to declare its desired
+// option info
+// e.g.
+// user can provide something like this
+//
+// "4nice$1h@"  // remian to build
+//  ^   ^^
+//specif||ic the number of code name, here is "4"
+//      ||
+//      t|he code name is "nice"
+//       |
+//       "$", begin of option name. follow the name length, "1"
+//       and the name is "h"
+
+// TODO: add "getopt" interface, allow user to handle complicate
+// situations.
 
 #endif
