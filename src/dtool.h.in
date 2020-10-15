@@ -2,7 +2,7 @@
 #define DTOOLMAIN
 
 #define STRINGIFY(s) #s
-#define DTOOLVERSION STRINGIFY(${Dtool_VERSION_MAJOR}) "." STRINGIFY(${Dtool_VERSION_MINOR})
+#define DTOOLVERSION STRINGIFY(${Dtool_VERSION_MAJOR}) "." STRINGIFY(${Dtool_VERSION_MINOR}) "." STRINGIFY(${Dtool_VERSION_PATCH})
 
 #include <stdio.h>
 #include <stdlib.h>

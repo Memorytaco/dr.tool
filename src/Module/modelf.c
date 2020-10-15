@@ -68,6 +68,9 @@ static void sym(modcore handle) {
   char *namecolor = setcmd('m', 3, 38, 5, 153);
   char *hexcolor = setcmd('m', 3, 38, 5, 83);
   char *keycolor = setcmd('m', 3, 38, 5, 196);
+  char *specolor = setcmd('m', 3, 38, 5, 11);
+  char *spebcolor = setcmd('m', 3, 48, 5, 8);
+  char *boldcmd = setcmd('m', 1, 1);
 
   size_t size = 0;
   struct section *strtb = NULL;
@@ -78,6 +81,42 @@ static void sym(modcore handle) {
     entsize = sechdr.shdr_32->sh_entsize;
     size_t count = size/entsize;
     printf(" Entsz %zu, Secsz %zu, %zu symbols.\n", entsize, size, count);
+    for (size_t i = 0; i<count; i++) {
+      printf("%sNum%s: %4zu= %sSize%s %4u, %sNdx %s%04X%s%s%s%2s%s, %sBind %s%02X%s %6s, %sType %s%02X%s %6s\nName %-16u %04u: %s%s%s\n",
+          keycolor,
+          clear,
+          i,
+          keycolor,
+          clear,
+          (symhdr.sym_32+i)->st_size,
+          keycolor,
+          hexcolor,
+          (symhdr.sym_32+i)->st_shndx,
+          boldcmd,
+          specolor,
+          spebcolor,
+          (symhdr.sym_32+i)->st_shndx == SHDR_INDEX_UNDEF?"U ":
+          (symhdr.sym_32+i)->st_shndx == SHDR_INDEX_ABS?" A":
+          (symhdr.sym_32+i)->st_shndx == SHDR_INDEX_COMMON?" C":
+          "  ",
+          clear, // Before Bind
+          keycolor,
+          hexcolor,
+          SYM_BIND_FIELD((symhdr.sym_32+i)->st_info),
+          clear,
+          get_symbind((symhdr.sym_32+i)->st_info),
+          keycolor,
+          hexcolor,
+          SYM_TYPE_FIELD((symhdr.sym_32+i)->st_info),
+          clear,
+          get_symtype((symhdr.sym_32+i)->st_info),
+          (symhdr.sym_32+i)->st_value,
+          (symhdr.sym_32+i)->st_name,
+          namecolor,
+          ((char*)strtb->sec)+(symhdr.sym_32+i)->st_name,
+          clear
+          );
+    }
   } else if (tb->class == 64){
     size = sechdr.shdr_64->sh_size;
     strtb = tb->ents+sechdr.shdr_64->sh_link;
@@ -85,7 +124,7 @@ static void sym(modcore handle) {
     size_t count = size/entsize;
     printf(" Entsz %zu, Secsz %zu, %zu symbols, SNdx %u\n", entsize, size, count, sechdr.shdr_64->sh_link);
     for (size_t i = 0; i<count; i++) {
-      printf("%sNum%s: %4zu= %sSize%s %4zu, %sNdx %s%04X%s, %sBind %s%02X%s %6s, %sType %s%02X%s %6s\nName %-16lu %04u: %s%s%s\n",
+      printf("%sNum%s: %4zu= %sSize%s %4zu, %sNdx %s%04X%s%s%s%2s%s, %sBind %s%02X%s %6s, %sType %s%02X%s %6s\nName %-16lu %04u: %s%s%s\n",
           keycolor,
           clear,
           i,
@@ -95,7 +134,14 @@ static void sym(modcore handle) {
           keycolor,
           hexcolor,
           (symhdr.sym_64+i)->st_shndx,
-          clear,
+          boldcmd,
+          specolor,
+          spebcolor,
+          (symhdr.sym_64+i)->st_shndx == SHDR_INDEX_UNDEF?"U ":
+          (symhdr.sym_64+i)->st_shndx == SHDR_INDEX_ABS?" A":
+          (symhdr.sym_64+i)->st_shndx == SHDR_INDEX_COMMON?" C":
+          "  ",
+          clear, // Before Bind
           keycolor,
           hexcolor,
           SYM_BIND_FIELD((symhdr.sym_64+i)->st_info),
