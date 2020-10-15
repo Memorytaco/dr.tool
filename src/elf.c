@@ -124,15 +124,59 @@ void free_sectbl(struct sectbl *tb)
   return;
 }
 
-char const* sectbl_getname(struct sectbl const tb, size_t idx)
+char const* sectbl_getname(struct sectbl const * tb, size_t idx)
 {
   const char* toret = "null";
   union unisechdr hdr;
-  hdr.all = tb.ents[idx].hdr;
-  if (tb.name == 0) return toret;
-  if (tb.class == 32)
-    toret = tb.ents[tb.name].sec + hdr.shdr_32->sh_name;
+  hdr.all = tb->ents[idx].hdr;
+  if (tb->name == 0) return toret;
+  if (tb->class == 32)
+    toret = tb->ents[tb->name].sec + hdr.shdr_32->sh_name;
   else
-    toret = tb.ents[tb.name].sec + hdr.shdr_64->sh_name;
+    toret = tb->ents[tb->name].sec + hdr.shdr_64->sh_name;
   return toret;
 }
+
+size_t sectbl_search(struct sectbl const * tb, char* name)
+{
+  for (size_t i = 1; i<tb->num; i++) {
+    if (!strcmp(name, sectbl_getname(tb, i)))
+      return i;
+  }
+  return 0;
+}
+
+///////////////////////////////////////////////
+// Elf File Symbol info operation functions  //
+///////////////////////////////////////////////
+
+const char* get_symbind(octet info)
+{
+  static const char* binds[16] = {
+    "LOCAL",
+    "GLOBAL",
+    "WEAK",
+    [13] = "LOPROC",
+    [15] = "HIPROC"
+  };
+  return binds[SYM_BIND_FIELD(info)];
+}
+const char* get_symtype(octet info)
+{
+  static const char* types[16] = {
+    "NOTYPE",
+    "OBJECT",
+    "FUNC",
+    "SECTION",
+    "FILE",
+    "COMMON",
+    "TLS",
+    "NUM",
+    [10] = "LOOS",
+    [12] = "HIOS",
+    [13] = "LOPROC",
+    [15] = "HIPROC"
+  };
+  return types[SYM_TYPE_FIELD(info)];
+}
+
