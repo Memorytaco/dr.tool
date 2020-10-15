@@ -9,8 +9,7 @@ char* readfile(const char * const path, size_t *size)
 {
   FILE *stream = fopen(path, "r");
   if (!stream) {
-    perror("util/file.c readfile");
-    if (size != NULL) *size = -1;
+    if (size != NULL) *size = 0;
     return NULL;
   }
   fseek(stream, 0, SEEK_END);

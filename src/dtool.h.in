@@ -1,0 +1,16 @@
+#ifndef DTOOLMAIN
+#define DTOOLMAIN
+
+#define STRINGIFY(s) #s
+#define DTOOLVERSION STRINGIFY(${Dtool_VERSION_MAJOR}) "." STRINGIFY(${Dtool_VERSION_MINOR})
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <errno.h>
+#include <ctype.h>  // for isalpha some functions
+
+
+#endif
