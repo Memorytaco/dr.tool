@@ -152,7 +152,7 @@ typedef struct ELF_SHDR_64 {
   qword sh_entsize;     // Entry size if section holds table
 } Shdr_64;
 
-// Special Section Indexes
+// Special Section Indexes and it may be used in other places
 #define SHDR_INDEX_UNDEF     0x00   // mean undefined section
 #define SHDR_INDEX_LORESERVE 0xff00
 #define SHDR_INDEX_LOPROC    0xff00
@@ -214,7 +214,8 @@ typedef struct ELF_PHDR_64 {
 //////////////////////////////////////////////////////////////////
 typedef struct ELF_SYM_32 {
   dword st_name;    // index to symbol string table
-  dword st_value;   // value of symbol, meaning is depending on context
+  dword st_value;   // value of symbol, its meaning depends
+                    // on the context
   dword st_size;    // size of the symbol
   octet st_info;    // symbol type and its binding attributes.
   octet st_other;   // no meaning, hold 0.
@@ -230,13 +231,17 @@ typedef struct ELF_SYM_64 {
   qword st_size;    // Size of object  (e.g. common)
 } Sym_64;
 
+// pass in a single byte, and return the relevant field.
+#define SYM_BIND_FIELD(v) (((v)>>4)&0x0F)
+#define SYM_TYPE_FIELD(v) ((v)&0x0F)
+
 // symbol binding type
 enum ELFSYM_BIND {
-  STB_LOCAL = 0,
-  STB_GLOBAL = 1,
-  STB_WEAK = 2,
-  STB_LOPROC = 13,
-  STB_HIPROC = 15
+  STB_LOCAL   = 0,
+  STB_GLOBAL  = 1,
+  STB_WEAK    = 2,
+  STB_LOPROC  = 13,
+  STB_HIPROC  = 15
 };
 
 // symbol type
@@ -297,22 +302,38 @@ int getABIClass(struct ELFHeader_Pre* hd);
 char* const get_filetype_str(void* mem);
 char* const get_os_str(void *mem);
 
+// elf file header
 union unihdr {
   void *all;
   struct ELFHeader_32* hdr_32;
   struct ELFHeader_64* hdr_64;
 };
 
+// section header
 union unisechdr {
   void *all;
   Shdr_32 *shdr_32;
   Shdr_64 *shdr_64;
 };
 
+// segment header
 union uniseghdr {
   void *all;
 };
 
+// symbol header
+union unisymhdr {
+  void *all;
+  struct ELF_SYM_32 *sym_32;
+  struct ELF_SYM_64 *sym_64;
+};
+
+///////////////////////////////////////////////
+// section manipulation functions and macros //
+///////////////////////////////////////////////
+
+// structure holding all information
+// about elf sections
 struct sectbl {
   int class;
   int num;
@@ -323,10 +344,20 @@ struct sectbl {
   } *ents;
 };
 
+// build the section infomation, mem can be freed after this call.
 struct sectbl build_sectbl(void* mem);
+// free this structure.
 void free_sectbl(struct sectbl *tb);
-char const* sectbl_getname(struct sectbl const tb, size_t idx);
+// query one section entry's name
+char const* sectbl_getname(struct sectbl const * tb, size_t idx);
+// search the name of one section and return its index.
+size_t sectbl_search(struct sectbl const * tb, char* name);
 
+///////////////////////////////////////////////
+// Elf File Symbol info operation functions  //
+///////////////////////////////////////////////
 
+const char* get_symbind(octet);
+const char* get_symtype(octet);
 
 #endif
