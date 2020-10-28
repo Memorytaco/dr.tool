@@ -44,15 +44,64 @@
 //////////////////////////////////////////////////////
 
 #define TEND  0x0000  // end marker for type definition
-#define OCTT  0x0000  // octet
+#define OCTT  0x8000  // octet
 #define TVAL  0x5000  // value prefix
 
 /*
+ *
  * h 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 l
  *  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- *  +       |       |       |       +
+ *  + gtype |ayt-oct|     id/len    +
+ *  + (gty) |   -   |     /suffix   +
  *  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ * gtype : type header. distinguish header type.
+ *         ARRY B 0001, array type header
+ *         AGGR B 0010, aggregate type header
+ *         AEND B 0100, aggregate type end marker
+ *         OCTT B 1000, single octet like type
+ *         TVAL B 0110, value suffix type
+ *         TEND B 0000. end marker for type bits.
+ * ayt: array element type only useful when @gtype@ is $ARRY$.
+ *        Aoctet  B 00
+ *        Aarray  B 01
+ *        Aaggre  B 10
+ *        Aresrv  B 11
+ * oct: octet type. only useful when @ayt@ is B 00.
+ *       octet  B 00
+ *       word   B 01
+ *       dword  B 10
+ *       qword  B 11
+ *       it's the exponent of unsigned 1 for its size.
+ *       octet is 1 << 0, so 1 byte.
+ *       word  is 1 << 1, so 2 bytes.
+ *       dword is 1 << 2, so 4 bytes.
+ *       qword is 1 << 2, so 8 bytes.
+ * if @gtype@ is $ARRY$, len is array elements length.
+ *    one optional $TVAL$ type value can follow.
+ * if @gtype@ is $AGGR$, id is used to identify
+ *    aggregate type header identity. so one $AEND$
+ *    can match the type ending.
+ * if @gtype@ is $AEND$, the id field must match with
+ *    $AGGR$ header id. otherwise, it's an error.
+ * if @gtype@ is $OCTT$, suffix means how many fields
+ *    have this type.
+ * if @gtype@ is $TVAL$, suffix means the value, the number
+ *    which is between 0 to 255.
+ *
 */
+
+// FIELD access mask and its relevant shift value used in
+// "<<" or ">>" operator.
+enum {
+  GTYFIELD = 0XF000,
+  GTYSHIFT = 12,
+  AYTFIELD = 0X0C00,
+  AYTSHIFT = 10,
+  OCTFIELD = 0X0300,
+  OCTSHIFT = 8,
+  VALFIELD = 0X00FF,
+  VALSHIFT = 0
+};
 
 typedef unsigned short VType;
 
@@ -72,33 +121,44 @@ typedef struct VType {
 
 // return true(1) if it holds related type.
 #define isarry(v) (ARRY&(v))
-#define isaggr(v) (AGGR&(v))
-#define isaend(v) (AEND&(v))
-#define issing(v) (!isarry(v) && !isaggr(v) && !isaend(v))
-#define issval(v) (0x5==(v>>12)) // if it is a suffix count
+#define isaggr(v) (AGGR&(v)&&!issval(v))
+#define isaend(v) (AEND&(v)&&!issval(v))
+#define isoctt(v) (OCTT&(v))
+#define issval(v) ((AGGR|AEND)==((v)&GTYFIELD)) // if it is a suffix count
 
-// octet type
-#define getoctet(v) (1<<(((v)&0x0300)>>8))  // 1,2,4,8
-#define setoctet(v, e) ((((e)&0x03)<<8)|(v)) // e is 0,1,2,3
+//////////////////////////////
+// uniform field access macro.
+//////////////////////////////
+#define field(v, mask) ((v)&(mask))
 
+//////////////////////////////
+// octet field value, 00 - 11.
+//////////////////////////////
+// get octet field value, 0 ~ 3.
+#define getoctet(v) (field(v, OCTFIELD)>>OCTSHIFT)
+// e is exponent, 0 ~ 3.
+#define setoctet(v, e) (field(e<<OCTSHIFT, OCTFIELD)|(v))
+
+/////////////
 // array type
-#define Asingle 0x00
+/////////////
+#define Aoctet  0x00
 #define Aarray  0x01
 #define Aaggre  0x02
 #define Aresrv  0x03
-#define getarryt(v) ((((v)>>8)&0x0c)>>2) // array inner ele type
-#define setarryt(v, t) (((t)<<10)|(v))
-
+// array inner ele type
+#define getarryt(v) (field(v, AYTFIELD)>>AYTSHIFT)
+#define setarryt(v, t) (field((t)<<AYTSHIFT, AYTFIELD)|(v))
 // array len manipulate
-#define getarrylen(v) (0x00ff&(v))    // array len
-#define setarrylen(v, l) (0xff00&(v)|(l))
+#define getarrylen(v) (field(v, VALFIELD)>>VALSHIFT)
+#define setarrylen(v, l) (field(l, VALFIELD)|(v))
 
 // aggregrate id, from 0 ~ 255, unsigned int8
-#define getaggrid(v) (0x00ff&(v))
-#define setaggrid(v, i) (((i)&0x00ff)|(v))
+#define getaggrid(v) (field(v, VALFIELD)>>VALSHIFT)
+#define setaggrid(v, i) (field(i, VALFIELD)|(v))
 
-#define setval(v, n) (0xff00&(v)|(n)) // set suffix count
-#define getval(v) (0x00ff&(v))
+#define getval(v) (field(v, VALFIELD)>>VALSHIFT)
+#define setval(v, n) (field(n, VALFIELD)|(v)) // set suffix count
 
 // The structure
 struct vara {
@@ -131,7 +191,7 @@ void  vara_info(vtra store)
   printf("%s: ", store->name);
   for (int i = 0; *(store->dbit+i) != TEND; i++) {
     if (i%5 == 0) printf("\n");
-    printf("%04x ", *(store->dbit+i));
+    printf("%04x ", store->dbit[i]);
   }
   printf("\n");
 }
@@ -211,15 +271,15 @@ static VType* buildbits(char const *d, size_t *len)
   }
   if (clen == 0) return NULL;
   size_t mut = 1;   // factor for controling bits mem size
-  VType *bits = malloc(clen*mut); // actual bits memory
+  // actual bits memory
+  VType *bits = malloc(clen*mut*(sizeof(VType)));
   // bits index @bi@, bi should always point to an
   // element, and should satisfy condition that "bi < cursor".
   // and @cursor@ should always point an empty place.
   size_t bi = 0;
-#define checkbits(i, mem) if (i>=clen*mut || i == clen*mut-1) {\
-  mut++;\
-  mem = realloc(mem, clen*mut*2);\
-}
+  // number 8 is preallocated space, so don't need check every
+  // time before you want move cursor @bi forward.
+#define checkbits(indx, mem) mem=indx>=(clen*mut-8)?realloc(mem,clen*(sizeof(VType))*(++mut)):mem;
 
   size_t SLim = 64; // stack limit
   VType stack[SLim];  // environment stack
@@ -244,59 +304,38 @@ static VType* buildbits(char const *d, size_t *len)
   unsigned char num = 0;  // for the number building
   char *di = d; // @d string index pointer
   while (di < d + clen) {
-    unsigned char octsize = 0;
+    unsigned char oct = 0;  // oct field value
     switch(*di) {
       case 'o':
-      case 'O': octsize = 1; goto SINGLE;
+      case 'O': oct = 0; goto SINGLE;
       case 'w':
-      case 'W': octsize = 2; goto SINGLE;
+      case 'W': oct = 1; goto SINGLE;
       case 'd':
-      case 'D': octsize = 4; goto SINGLE;
+      case 'D': oct = 2; goto SINGLE;
       case 'q':
-      case 'Q': octsize = 8; goto SINGLE;
-      case '@': octsize = 8; goto SINGLE;
+      case 'Q': oct = 3; goto SINGLE;
+      case '@': oct = 3; goto SINGLE;
     }
     goto AGGRBEG;
 
 SINGLE:
-    di++;
+    di += 1;  // next char
+    ele = setoctet(OCTT,oct);
     if (isdigit(*di)) {
       num = strtol(di, &di, 10);
-      switch (octsize) {
-        case 1: ele = setoctet(OCTT,0); break;
-        case 2: ele = setoctet(OCTT,1); break;
-        case 4: ele = setoctet(OCTT,2); break;
-        case 8: ele = setoctet(OCTT,3); break;
-      }
+      num = num?num:1;  // make sure num is not zero
       ele = setval(ele, num);
-      *(bits+(bi++)) = ele;
-      checkbits(bi, bits);
-      if (si == 0) {
-        size += octsize * num;  // add size to returned size
-      } else {
-        nstack[si-1][0] += octsize * num;
-      }
     } else if (*di == '[') {
-      // TODO: support mutiple array nesting
-      di++;
-      num = strtol(di, &di, 10);
-      if (*di == ']') di++;
-      ele = setoctet(setarryt(ARRY, Asingle), 0);
-      ele = setarrylen(ele, num);
-      *(bits+(bi++)) = ele;
-      checkbits(bi, bits);
-      if (isdigit(*di)) {
-        num *= strtol(di, &di, 10);
-        ele = setval(TVAL, num);
-        *(bits+(bi++)) = ele;
-        checkbits(bi, bits);
-      }
-      if (si == 0) {
-        size += octsize * num;
-      } else {
-        nstack[si-1][0] += octsize * num;
-      }
+      // TODO add array support
     }
+    *(bits+(bi++)) = ele;
+    checkbits(bi, bits);
+    if (si == 0) {
+      size += (1<<oct) * num;  // add size to returned size
+    } else {
+      nstack[si-1][0] += (1<<oct) * num;
+    }
+    num = 1;  // reset num to 1
     continue;
 
 AGGRBEG:
@@ -322,7 +361,8 @@ AGGRBEG:
       checkbits(bi, bits);
       if (isdigit(*di)) {
         num = strtol(di, &di, 10);
-        *(bits+(bi++)) = setval(TVAL, num);
+        if (num) *(bits+(bi++)) = setval(TVAL, num);
+        num = num?num:1;
         checkbits(bi, bits);
       }
       pop(stack, &si);  // finish one aggregate type
@@ -330,8 +370,9 @@ AGGRBEG:
       if (si == 0) {
         size += nstack[si][0];
       } else {
-        nstack[si-1][0] += num;
+        nstack[si-1][0] += nstack[si][0];
       }
+      nstack[si][0] = 0;
       // TODO: add array support for aggregate type
     }
   }
@@ -351,8 +392,8 @@ AGGRBEG:
 // @capi is the max depth size capacity.
 static size_t getunitsize
 ( VType const *bit
-, size_t capi
-, VType const **posi
+, size_t capi         // stack limit
+, VType const **posi  // new position of next unit
 ) {
   // environment stack, store array and aggregate type.
   // used to move element cursor.
@@ -368,8 +409,8 @@ static size_t getunitsize
     if (isarry(*bit)) {
       size = getarrylen(*bit);  // get its len first
       switch (getarryt(*bit)) {
-        case Asingle:
-          size *= getoctet(*bit); // get array size
+        case Aoctet:
+          size *= 1 << getoctet(*bit); // get array size
           if (issval(*(++bit))) {
             // check suffix val
             size *= getval(*bit)?getval(*bit):1;
@@ -427,9 +468,10 @@ static size_t getunitsize
     } else if (isaggr(*bit)) {
       push(*bit, Tstack, &si, capi);
       bit++;  // next unit
-    } else if (issing(*bit)) {
+    } else if (isoctt(*bit)) {
       size = getval(*bit);
-      size = size?size*getoctet(*bit):getoctet(*bit);
+      size = size?size:1;
+      size *= 1 << getoctet(*bit);
       bit++;  // next unit
       if (isarry(peek(Tstack, si))) {
         printf("Expected aggregrate type, but get array.\n");
@@ -454,10 +496,10 @@ static size_t getelesize
   VType const *next = bit;
   size_t size = 0;
   size_t num = 0;
-  if (issing(*bit)) {
+  if (isoctt(*bit)) {
     num = getval(*bit);
     num = num?num:1;
-    size = getoctet(*bit);
+    size = 1 << getoctet(*bit);
     next = bit+1;
   } else if (isarry(*bit)) {
     if (issval(*(bit+1))) {
@@ -473,8 +515,8 @@ static size_t getelesize
     if (size) {
       if (issval(*(next-1))) {
         num = getval(*(next-1));
-        num = num?num:1;
       }
+      num = num?num:1;  // make usre num is not zero
       size /= num;
       next = bit + 1;
     }
@@ -506,7 +548,7 @@ void* vara_ptr(vtra store, int depth, size_t* retsize, ...)
   // [0] is env, and [1] is the type bits
   VType env[2] = {Aresrv, TEND}; // Aresrv indicate toplevel
   /*
-   * Asingle current selected unit is owdq
+   * Aoctet current selected unit is owdq
    * Aarray  array environment, may query its element size
    * Aaggre  aggregate environment, like toplevel
    */
@@ -546,7 +588,7 @@ void* vara_ptr(vtra store, int depth, size_t* retsize, ...)
       guard(*bit == TEND);
       // and then read the env, it won't be TEND now.
       env[0] = isarry(*bit)?Aarray:
-               isaggr(*bit)?Aaggre:Asingle;
+               isaggr(*bit)?Aaggre:Aoctet;
       // bit should point to the unit to be processed
       // and it is the environment.
       // it may point arry or aggr or normal octet.
@@ -572,7 +614,7 @@ void* vara_ptr(vtra store, int depth, size_t* retsize, ...)
       }
       guard(*bit == TEND); // there may be no need, but do it.
       env[0] = isarry(*bit)?Aarray:
-               isaggr(*bit)?Aaggre:Asingle;
+               isaggr(*bit)?Aaggre:Aoctet;
       env[1] = *bit;
     } else if (*env == Aarray) {
       // bit should point to array type now, which
@@ -589,7 +631,7 @@ void* vara_ptr(vtra store, int depth, size_t* retsize, ...)
           bit = posi;
           break;
         default:
-          size = getoctet(*bit);
+          size = 1 << getoctet(*bit);
           break;
       }
       guard(size == 0);
@@ -602,14 +644,14 @@ void* vara_ptr(vtra store, int depth, size_t* retsize, ...)
       addr += ix * size;
       if (bit == posi) {
         env[0] = isarry(*bit)?Aarray:
-                 isaggr(*bit)?Aaggre:Asingle;
+                 isaggr(*bit)?Aaggre:Aoctet;
         env[1] = *bit;
       } else {
-        env[0] = Asingle; // env[1] unchanged, 0 is enough
+        env[0] = Aoctet; // env[1] unchanged, 0 is enough
         env[1] = TEND;
       }
     } else {
-      // the Asingle env, means something is wrong
+      // the Aoctet env, means something is wrong
       printf("Error, depth exceeds.\n");
       guard(1);
     }
