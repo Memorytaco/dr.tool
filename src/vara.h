@@ -1,5 +1,5 @@
-#ifndef DTOOLPARA
-#define DTOOLPARA
+#ifndef DTOOLVARA
+#define DTOOLVARA
 
 #include <stdarg.h>
 #include <string.h>
