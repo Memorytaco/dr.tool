@@ -94,12 +94,17 @@ pkgsig pkgload(const char *name, enum pkgscope scop)
 void   pkgunload(pkgsig sig)
 {
   pkgsig pre = __CACHE.list;
-  while (pre != NULL && pre->next != sig) pre = pre->next;
+  while (pre != NULL && pre != sig && pre->next != sig)
+    pre = pre->next;
   if (pre == NULL) {
     printf("Error, signature doesn't exsist.\n");
     return ;
   }
-  pre->next = sig->next;
+  if (pre == sig) {
+    __CACHE.list = sig->next;
+  } else {
+    pre->next = sig->next;
+  }
   dlclose(sig->dl);
   free(sig);
 }
@@ -122,8 +127,8 @@ void pkgshowinfo(pkgsig sig)
 {
   struct pkgver ver = sig->meta->version;
   printf("%s: %s\n", sig->meta->name, sig->meta->author);
-  printf("Signature: %02X\n", sig->meta->ui);
-  printf("Version %d.%d.%d .\n", ver.major, ver.minor, ver.patch);
+  printf("Signature %02X ", sig->meta->ui);
+  printf("Version %d.%d.%d\n", ver.major, ver.minor, ver.patch);
   printf("%s\n", sig->meta->desc);
 }
 
