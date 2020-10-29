@@ -279,7 +279,7 @@ static VType* buildbits(char const *d, size_t *len)
   size_t bi = 0;
   // number 8 is preallocated space, so don't need check every
   // time before you want move cursor @bi forward.
-#define checkbits(indx, mem) mem=indx>=(clen*mut-8)?realloc(mem,clen*(sizeof(VType))*(++mut)):mem;
+#define checkbits(indx, mem) mem=indx>=(clen*mut-8)?realloc(mem,clen*(sizeof(VType))*(++mut)):mem
 
   size_t SLim = 64; // stack limit
   VType stack[SLim];  // environment stack
