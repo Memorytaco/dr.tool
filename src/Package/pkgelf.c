@@ -1,8 +1,9 @@
-#include "pkgelf.h"
-
 #include "pkg.h"
 #include "cmd.h"
 #include "elf.h"
+#include "vara.h"
+
+#include "dtool.h"
 
 char * typesig = "elf:@d2";
 
@@ -46,8 +47,10 @@ void show_hex(unsigned char* buf, int num, int length) {
 }
 
 static void hex(pkgsig sig) {
-  struct modelft* para = pkggetvar(sig);
-  show_hex(para->data, para->num, para->length);
+  vtra para = pkggetvar(sig);
+  show_hex(vptr(unsigned char*, para, 1, 0)
+      , vptr(int, para, 1, 1)
+      , vptr(int, para, 1, 2));
 }
 
 static void sym(pkgsig sig) {
