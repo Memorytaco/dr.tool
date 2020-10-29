@@ -16,10 +16,10 @@ add_library(dlib STATIC ${CORE})
 
 # one main interface and one test tool
 add_executable(dtool main.c)
-add_executable(modrun modrun.c)
+add_executable(pkg pkginfo.c)
 target_link_libraries(dtool dlib)
-target_link_libraries(modrun dlib)
+target_link_libraries(pkg dlib)
 
 add_subdirectory(Package)
 
-install(TARGETS dtool modrun DESTINATION bin/)
+install(TARGETS dtool pkg DESTINATION bin/)
