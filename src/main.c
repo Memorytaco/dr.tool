@@ -2,11 +2,9 @@
 #include "pkg.h"
 #include "cmd.h"
 #include "elf.h"
+#include "vara.h"
 #include "disas.h"
 #include "util/file.h"
-
-// include module header here, for communication between modules
-#include "Package/pkgelf.h"
 
 struct store {
   char* name;
@@ -83,15 +81,17 @@ void cmd_call_elfsec
   }
   if (ptr->ascii) {
     printf("%s: %zd | %08zX\n", sectbl_getname(&table, index), size, size);
-    struct modelft elfpara = { table.ents[index].sec, .num = 16, size };
+    vtra para = vara_alloc("elf:@D2");
+    vptr(void*, para, 1, 0) = table.ents[index].sec;
+    vptr(int, para, 1, 1) = 16;
+    vptr(int, para, 1, 2) = size;
     printf("Loading the Package!\n");
     pkgsig sig = pkgload("elf", PKGGLOBAL);
     if (sig == NULL) {
       printf("Error when loading package\n");
-    } else {
-      pkgshowinfo(sig);
+      exit(-1);
     }
-    pkgsetvar(sig, &elfpara);
+    pkgsetvar(sig, para);
     pkginvoke(sig, "hex");
   } else {
     fwrite(table.ents[index].sec, 1, size, stdout);
