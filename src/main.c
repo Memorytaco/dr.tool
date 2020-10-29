@@ -1,12 +1,12 @@
 #include "dtool.h"
-#include "mod.h"
+#include "pkg.h"
 #include "cmd.h"
 #include "elf.h"
 #include "disas.h"
 #include "util/file.h"
 
 // include module header here, for communication between modules
-#include "Module/modelf.h"
+#include "Package/pkgelf.h"
 
 struct store {
   char* name;
@@ -84,15 +84,15 @@ void cmd_call_elfsec
   if (ptr->ascii) {
     printf("%s: %zd | %08zX\n", sectbl_getname(&table, index), size, size);
     struct modelft elfpara = { table.ents[index].sec, .num = 16, size };
-    printf("Opening the module\n");
-    modcore handle = modprobe("elf", RTLD_NOW);
-    if (handle == NULL) {
-      printf("Error when loading module\n");
+    printf("Loading the Package!\n");
+    pkgsig sig = pkgload("elf", PKGGLOBAL);
+    if (sig == NULL) {
+      printf("Error when loading package\n");
     } else {
-      modshow(handle);
+      pkgshowinfo(sig);
     }
-    modsetpara(handle, &elfpara);
-    modcall(handle, "hex");
+    pkgsetvar(sig, &elfpara);
+    pkginvoke(sig, "hex");
   } else {
     fwrite(table.ents[index].sec, 1, size, stdout);
   }
@@ -117,9 +117,9 @@ void cmd_call_elfsym
     exit(-1);
   }
   struct sectbl tbl = build_sectbl(buffer);
-  modcore handle = modprobe("elf", RTLD_NOW);
-  modsetpara(handle, &tbl);
-  modcall(handle, "sym");
+  pkgsig sig = pkgload("elf", PKGGLOBAL);
+  pkgsetvar(sig, &tbl);
+  pkginvoke(sig, "sym");
 }
 
 int main(int argc, char** argv)
