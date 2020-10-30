@@ -1,3 +1,6 @@
 [submodule "capstone"]
 	path = vender/capstone
 	url = https://github.com/aquynh/capstone.git
+[submodule "vender/libfyaml"]
+	path = vender/libfyaml
+	url = https://github.com/pantoniou/libfyaml.git
