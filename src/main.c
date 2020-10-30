@@ -16,8 +16,7 @@ struct store {
 void cmd_call_help(struct cmdargt* arg, void* data, void* store) {
   char *color = setcmd('m', 3, 38, 5, 153);
   char *endcmd = setcmd('m', 1, 0);
-  printf("Author: Memorytaco, github: github.com/Memorytaco.\n");
-  printf("Version " DTOOLVERSION ";\n");
+  printf("Dtool (By github.com/Memorytaco) " DTOOLVERSION "\n");
   printf("dtool <command> [option [arguments]]...\n");
   printf("  command: elf, disas\n");
   printf("  %self%s   [-h,--help,-ascii,-sec,-sym] file\n", color, endcmd);
@@ -85,7 +84,6 @@ void cmd_call_elfsec
     vptr(void*, para, 1, 0) = table.ents[index].sec;
     vptr(int, para, 1, 1) = 16;
     vptr(int, para, 1, 2) = size;
-    printf("Loading the Package!\n");
     pkgsig sig = pkgload("elf", PKGGLOBAL);
     if (sig == NULL) {
       printf("Error when loading package\n");

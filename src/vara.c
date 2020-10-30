@@ -190,7 +190,7 @@ void  vara_info(vtra store)
 {
   printf("%s: ", store->name);
   for (int i = 0; *(store->dbit+i) != TEND; i++) {
-    if (i%5 == 0) printf("\n");
+    if (i%8 == 0) printf("\n");
     printf("%04x ", store->dbit[i]);
   }
   printf("\n");
@@ -658,6 +658,15 @@ void* vara_ptr(vtra store, int depth, size_t* retsize, ...)
   }
   va_end(ap);
   return addr;
+}
+
+// TODO: add security check
+void  vara_free(vtra store)
+{
+  free(store->dbit);
+  free(store->name);
+  free(store->data);
+  free(store);
 }
 
 // the index is always point to an empty location
