@@ -280,7 +280,6 @@ struct cmdarglst* cmd_match
 , struct cmdregt* regs
 , void* store
 ) {
-  if (argc <= 0) return NULL;
   bool valbool = false; // indicator of "--"
   enum cmdopt opt = cmd_opt_null;
   struct cmdargt *head = NULL, *ptr = NULL;
@@ -291,10 +290,11 @@ struct cmdarglst* cmd_match
   for (int idx = 0; idx < argc; idx++) {
     // transform the arguments and assign the address to @ptr
 #define iter(v) cmd_trans(argv[idx], v, &opt, &valbool)
-#define idx_guard(v) if (idx + 1 >= argc) {\
+#define idx_guard(v) do {\
+  if (idx + 1 >= argc) {\
   printf("required one value for \"%s\", but no more arguments.\n", (v)->key);\
-  exit(-1);\
-  }
+  exit(-1);} \
+} while (0)
     struct cmdargt *tmp = NULL;
     if (ptr == NULL) {
       tmp = iter(NULL);
@@ -313,7 +313,7 @@ struct cmdarglst* cmd_match
         assert(!strncmp("--", ptr->key, 2) && tmp == ptr);
       continue;
     }
-    
+
     /* now it will be long or short option */
     // search registry first
     ptr = tmp;  // pointer should always point to the last one
@@ -368,11 +368,10 @@ struct cmdarglst* cmd_match
       printf("expected one value for %s, but got option %s\n", ptr->key, tmp->key);
       exit(1);
     }
-  }
 #undef iter
 #undef idx_guard
+  }
 
-  /* printf("Total Got %zu commands\n", cmdlst_length(list)); */
   struct cmdarglst *lst = cmdargt_collect(head, argc);
   cmdlst_chk(&list, regs);
   cmdlst_call(list, lst, store);
@@ -459,8 +458,11 @@ struct cmdarglst* cmdargt_collect(struct cmdargt *arg, size_t cap)
   struct cmdarglst *toret = malloc(sizeof(struct cmdarglst));
   size_t num = 0;
   struct cmdargt *ptr = arg;
+
+  memset(toret, 0, sizeof(struct cmdarglst));
   toret->argv = malloc(cap+1);
   memset(toret->argv, 0, cap+1);
+
   for (; ptr != NULL; ptr = ptr->next) {
     if (ptr -> key == NULL || !strcmp(ptr->key, "--")) {
       size_t length = cmdargt_valength(ptr);
