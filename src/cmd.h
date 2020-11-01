@@ -72,8 +72,8 @@ struct cmdarglst {
 
 typedef struct cmdarglst* arglst;
 
-#define argvidx(v, i) ((struct cmdarglst*)(v))->argv[i]
-#define argvctx(v) ((struct cmdarglst*)(v))->argc
+#define argvidx(v, i) (((struct cmdarglst*)(v))->argv[i])
+#define argvctx(v) (((struct cmdarglst*)(v))->argc)
 
 struct cmdarglst* cmdargt_collect(struct cmdargt *arg, size_t cap);
 
