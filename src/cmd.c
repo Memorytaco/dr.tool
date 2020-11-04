@@ -5,6 +5,12 @@
 #include <assert.h>
 #include <stdint.h>
 
+#define PREFIX(p, v) p ## v
+
+/////////////////////////////////
+// 1. Command Line Escape Code //
+/////////////////////////////////
+
 static const char* cmd_prefix = "\033[";
 
 char* setcmd(char cmd, int argc, ...)
@@ -92,6 +98,144 @@ char* strnjoin(int num, ...)
   free(sarry);
   return buf;
 }
+
+
+////////////////////////////////////
+// 2. Command Line User Interface //
+////////////////////////////////////
+
+// This structure hold the parsed command line arguments.
+// if arguments has prefix of "--" or "-", it got a key
+// field. otherwise, key will be NULL, and value will
+// be appended to valist;
+// so, all values are stored in valist;
+struct cmdargt {
+  // the option name without prefix, terminted with \0.
+  char *key;
+  struct valink {
+    // the value content, its a buffer, it will
+    // alwayse get a copy, so it's safe to free.
+    void *val;
+    // length of the value buffer.
+    size_t size;
+    // pointer to next element
+    struct valink *next;
+  } *valist;
+  // if valist is NULL, then empty value, which
+  // may be judged by its user(the callback).
+  struct cmdargt* next;
+};
+
+// structure for holding extra values
+struct cmdarglst {
+  char **argv;
+  size_t argc;
+};
+
+const char* argvidx(arglst lst, size_t idx) {
+  if (idx < lst->argc) return lst->argv[idx]; else return NULL;
+}
+size_t argvctx(arglst lst) { return lst->argc; }
+
+
+#ifndef __prefix
+#define __prefix(v) PREFIX(cmdargt_, v)
+
+// value manipulation
+static void __prefix(free)
+  (struct cmdargt *arg);
+static void* __prefix(val_fetch)
+  (struct cmdargt const * arg, size_t idx, size_t *size);
+static void __prefix(val_append)
+  (struct cmdargt *arg, void const * buffer, size_t size);
+static size_t __prefix(val_len) (struct cmdargt const * arg);
+
+// navigate between command arguments
+static struct cmdargt* __prefix(idx)
+  (struct cmdargt const * arg, size_t idx);
+
+//  set arg to the ix ndx, begin with head.
+#define cmdargt_idx(arg, head, ix) do {\
+  size_t i = ix; \
+  for (arg=head; arg!=NULL&&i>0; arg=arg->next,i-=1); \
+} while(0);
+
+#define cmdargt_append_string(arg, str) \
+  PREFIX(cmdargt_, val_append) (arg, str, strlen(str)+1)
+
+// User Interface Definiton
+void * cmdargt_access(struct cmdargt *arg, size_t ix, size_t *sz) {
+  return __prefix(val_fetch) (arg, ix, sz);
+}
+size_t cmdargt_length(struct cmdargt *arg) {
+  return __prefix(val_len) (arg);
+}
+
+// Generate structure holding Extra command line values
+struct cmdarglst* __prefix(collect)
+  (struct cmdargt *arg, size_t cap);
+
+#undef __prefix
+#else
+#error Do Not Touch __prefix
+#endif
+
+#ifndef __prefix
+#define __prefix(v) PREFIX(cmdlst_, v)
+
+// a calling table to check correctness of the passed option
+// and call the sequence.
+struct cmdlst {
+  struct cmdregt *reg;
+  struct cmdargt *arg;
+  struct cmdlst *next;
+};
+
+// memory manipulation for cmdlst
+struct cmdlst* __prefix(alloc)
+  (void);
+void __prefix(free)
+  (struct cmdlst *lst);
+
+size_t __prefix(len) // get its length
+  (struct cmdlst const * lst);
+struct cmdlst* __prefix(idx) // get ele at idx
+  (struct cmdlst *hdr, size_t idx);
+
+// insert ptr at position idx, return its position.
+size_t __prefix(insert)
+  (struct cmdlst **hdr, size_t idx, struct cmdlst *ptr);
+struct cmdlst* __prefix(remove)
+  (struct cmdlst **hdr, size_t idx);
+
+// move idx1 to idx2. return the new index of the moved
+// element or return -1.
+int __prefix(moveto)
+  (struct cmdlst **hdr, size_t idx1, size_t idx2);
+
+// search the specific code in the call list, return its
+// index via @idx. or pass NULL to discard idx value.
+struct cmdlst* __prefix(search)
+  (struct cmdlst *hdr, size_t code, size_t *idx);
+
+size_t __prefix(idxof)
+  (struct cmdlst *hdr, struct cmdlst *ptr);
+
+/*
+ * check the command option dependency, if satifised, return true
+ * otherwise return false.
+ * it will search all the command and try its best to fill the
+ * requirment.
+ */
+bool __prefix(check)
+  (struct cmdlst **hdr, struct cmdregt* regs);
+
+void __prefix(invoke)
+  (struct cmdlst *hdr, struct cmdarglst *lst, void* store);
+
+#else
+#error Do Not Touch __prefix
+#endif
 
 // if find '=', return its position or return 0;
 static inline size_t search_eql_opt(char* arg, size_t len) {
@@ -360,7 +504,7 @@ struct cmdarglst* cmd_match
     }
     // if toggle, don't need any more operation
     if (founded->opt & cmd_opt_toggle) continue;
-    if (cmdargt_valength(ptr) > 0) continue;
+    if (cmdargt_val_len(ptr) > 0) continue;
     idx_guard(founded);  // make sure idx not exceed argc
     idx++;
     tmp = iter(ptr);
@@ -373,8 +517,8 @@ struct cmdarglst* cmd_match
   }
 
   struct cmdarglst *lst = cmdargt_collect(head, argc);
-  cmdlst_chk(&list, regs);
-  cmdlst_call(list, lst, store);
+  cmdlst_check(&list, regs);
+  cmdlst_invoke(list, lst, store);
   return lst;
 }
 
@@ -398,7 +542,7 @@ void cmdargt_free(struct cmdargt *arg)
   }
 }
 
-size_t cmdargt_valength(struct cmdargt const * arg)
+size_t cmdargt_val_len(struct cmdargt const * arg)
 {
   if (arg->valist == NULL) return 0;
   size_t length = 0;
@@ -407,7 +551,7 @@ size_t cmdargt_valength(struct cmdargt const * arg)
   return length;
 }
 
-void cmdargt_append_buffer(struct cmdargt *arg, void const * buffer, size_t size)
+void cmdargt_val_append(struct cmdargt *arg, void const * buffer, size_t size)
 {
   struct valink **ptr = &(arg->valist);
 
@@ -426,29 +570,15 @@ void cmdargt_append_buffer(struct cmdargt *arg, void const * buffer, size_t size
   (*ptr)->next = NULL;
 }
 
-void cmdargt_append_string(struct cmdargt *arg, char* str) {
-  size_t len = strlen(str); // size without \0
-  cmdargt_append_buffer(arg, str, len + 1); // here add the \0
-}
-
 // idx is both the index and the returned value size.
-void* cmdargt_fetch_val(struct cmdargt const * arg, size_t *idx)
-{
+void * cmdargt_val_fetch
+(struct cmdargt const * arg, size_t idx, size_t *size) {
   struct valink *ptr = arg->valist;
-  if (*idx >= cmdargt_valength(arg)) {
-    *idx = 0;
+  if (idx >= cmdargt_val_len(arg))
     return NULL;
-  }
-  for (; *idx > 0; *idx -= 1) ptr = ptr->next;
-  *idx = ptr->size;
+  for (; idx > 0; idx -= 1) ptr = ptr->next;
+  if (size) *size = ptr->size;
   return ptr->val;
-}
-
-// get the indexed argument. simple as inline.
-inline struct cmdargt* cmdargt_fetch_arg(struct cmdargt const * arg, size_t idx) {
-  for (; arg != NULL && idx > 0; arg = arg->next, idx-=1)
-    ;
-  return (struct cmdargt*)arg;
 }
 
 // allocate memory and collect all unused argument value into
@@ -465,17 +595,14 @@ struct cmdarglst* cmdargt_collect(struct cmdargt *arg, size_t cap)
 
   for (; ptr != NULL; ptr = ptr->next) {
     if (ptr -> key == NULL || !strcmp(ptr->key, "--")) {
-      size_t length = cmdargt_valength(ptr);
+      size_t length = cmdargt_val_len(ptr);
 #ifdef CMDUBUG
       printf("Got value Length %zd\n", length);
 #endif
       size_t i = 0;
       for (; i < length; i++) {
         size_t idx = i;
-        toret->argv[num+i] = cmdargt_fetch_val(ptr, &idx);
-#ifdef CMDUBUG
-        printf("The value is \"%s\", length %zd.\n", toret->argv[num+i], idx);
-#endif
+        toret->argv[num+i] = cmdargt_val_fetch(ptr, idx, NULL);
       }
       num += i;
     }
@@ -488,22 +615,25 @@ struct cmdarglst* cmdargt_collect(struct cmdargt *arg, size_t cap)
 // callist structure operation //
 /////////////////////////////////
 
-struct cmdlst * cmdlst_alloc() {
+struct cmdlst * cmdlst_alloc(void) {
   struct cmdlst *lst = malloc(sizeof(struct cmdlst));
   memset(lst, 0, sizeof(struct cmdlst));
   return lst;
 }
+
 void cmdlst_free(struct cmdlst *lst) {
   for (struct cmdlst *ptr = lst; ptr != NULL; ptr = lst) {
     lst = lst->next;
     free(ptr);
   }
 }
+
 size_t cmdlst_length(struct cmdlst const * lst) {
   size_t len = 0;
   for (; lst != NULL; lst = lst->next) len++;
   return len;
 }
+
 struct cmdlst * cmdlst_get(struct cmdlst *hdr, size_t idx)
 {
   size_t len = cmdlst_length(hdr);
@@ -513,6 +643,7 @@ struct cmdlst * cmdlst_get(struct cmdlst *hdr, size_t idx)
   }
   return hdr;
 }
+
 size_t cmdlst_insert(struct cmdlst **hdr, size_t idx, struct cmdlst *ptr)
 {
   size_t len = cmdlst_length(*hdr);
@@ -550,7 +681,7 @@ struct cmdlst * cmdlst_remove(struct cmdlst **hdr, size_t idx)
   return lptr;
 }
 
-int cmdlst_move(struct cmdlst **hdr, size_t idx1, size_t idx2)
+int cmdlst_moveto(struct cmdlst **hdr, size_t idx1, size_t idx2)
 {
   struct cmdlst* ptr = cmdlst_remove(hdr, idx1);
   if (ptr == NULL) return -1;
@@ -571,7 +702,7 @@ struct cmdlst * cmdlst_search(struct cmdlst *hdr, size_t code, size_t *index)
   return NULL;
 }
 
-size_t cmdlst_reverse_get(struct cmdlst *hdr, struct cmdlst *ptr)
+size_t cmdlst_idxof(struct cmdlst *hdr, struct cmdlst *ptr)
 {
   for (size_t i = 0; hdr!=NULL; hdr = hdr->next, i++) {
     if (hdr == ptr) return i;
@@ -579,10 +710,8 @@ size_t cmdlst_reverse_get(struct cmdlst *hdr, struct cmdlst *ptr)
   return 0;
 }
 
-/* static bool cmdlst_dep_chk(struct cmdlst *hdr, struct cmdlst *ptr) */
-
 // TODO
-bool cmdlst_chk(struct cmdlst **hdr, struct cmdregt* regs)
+bool cmdlst_check(struct cmdlst **hdr, struct cmdregt* regs)
 {
   struct cmdlst *ptr = *hdr;
   size_t listlength = cmdlst_length(*hdr);
@@ -600,9 +729,9 @@ bool cmdlst_chk(struct cmdlst **hdr, struct cmdregt* regs)
       struct cmdlst *fwd = NULL;
 optional:
       fwd = cmdlst_search(ptr, dpt->opt[j], &fwdidx);
-      fwdidx += cmdlst_reverse_get(*hdr, ptr);
+      fwdidx += cmdlst_idxof(*hdr, ptr);
       if (fwd == NULL) continue;
-      cmdlst_move(hdr, fwdidx, ptridx>0?ptridx-1:0);
+      cmdlst_moveto(hdr, fwdidx, ptridx>0?ptridx-1:0);
       goto optional;
     }
   }
@@ -616,7 +745,7 @@ optional:
       struct cmdlst *fwd = NULL;
 required:
       fwd = cmdlst_search(ptr, dpt->req[j], &fwdidx);
-      fwdidx += cmdlst_reverse_get(*hdr, ptr);
+      fwdidx += cmdlst_idxof(*hdr, ptr);
       if (fwd == NULL) {
         if (cmdlst_search(*hdr, dpt->req[j], NULL)) continue;
         int i = 0;
@@ -627,14 +756,14 @@ required:
         printf("Error: Lack option %s for %s\n", (regs+i)->key, ptr->reg->key);
         exit(-1);
       }
-      cmdlst_move(hdr, fwdidx, ptridx>0?ptridx-1:0);
+      cmdlst_moveto(hdr, fwdidx, ptridx>0?ptridx-1:0);
       goto required;
     }
   }
   return true;
 }
 
-void cmdlst_call(struct cmdlst *hdr, struct cmdarglst *lst, void* store)
+void cmdlst_invoke(struct cmdlst *hdr, struct cmdarglst *lst, void* store)
 {
   for (; hdr != NULL; hdr = hdr->next) {
     hdr->reg->call(hdr->arg, lst, store);
