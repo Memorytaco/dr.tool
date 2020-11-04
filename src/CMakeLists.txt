@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.15)
 
 project(Dtool VERSION 0.2.0 LANGUAGES C)
-set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED True)
+set(CMAKE_C_STANDARD 11)
 
 configure_file(dtool.h.in dtool.h)
 include_directories(${CMAKE_CURRENT_BINARY_DIR} . util)
