@@ -1,12 +1,12 @@
 #include "disas.h"
 
-void derror(FILE* s, const char* const msg, cs_err code)
+void dt_error(FILE* s, const char* const msg, cs_err code)
 {
   fprintf(s, "%s: %s\n", msg, cs_strerror(code));
 }
 
 // @syntax: true for ATT, false for Intel. Default is Intel.
-void dt_disas(char* name, unsigned char* filebuffer, size_t size, bool syntax)
+void dt_disas(char* name, unsigned char* filebuffer, size_t size, void *option)
 {
   // prepare commandline setting
   char *color = setcmd('m', 3, 38, 5, 153);
@@ -16,25 +16,36 @@ void dt_disas(char* name, unsigned char* filebuffer, size_t size, bool syntax)
   csh handle = 0;
   cs_err err = CS_ERR_OK;
 
-  err = cs_open(CS_ARCH_X86, CS_MODE_64, &handle);
-  if (err) {
-    derror(stderr, "CSOPENERROR", err);
+  if (strcmp(vara_name(option), "Disas")) {
+    printf("Invalid Option Paremeter\n");
     return;
   }
 
-  err = cs_option(handle, CS_OPT_SYNTAX, syntax ? CS_OPT_SYNTAX_ATT : CS_OPT_SYNTAX_INTEL);
+  err = cs_open( vptr(enum cs_arch, option, 1, 0)
+               , vptr(enum cs_mode, option, 1, 1)
+               , &handle);
+
   if (err) {
-    derror(stderr, "SETTINGSYNTAX", err);
+    dt_error(stderr, "CSOPENERROR", err);
+    return;
+  }
+
+  err = cs_option(handle, CS_OPT_SYNTAX
+                 , vptr(bool, option, 1, 2) ? CS_OPT_SYNTAX_ATT
+                                            : CS_OPT_SYNTAX_INTEL);
+  if (err) {
+    dt_error(stderr, "SETTINGSYNTAX", err);
     return;
   }
   printf("%s%s%s size: %zu:\n", color, name, endcmd, size);
   cs_insn *insn = NULL;
-  size = cs_disasm(handle, filebuffer, size, 0, 0, &insn);
+  size = cs_disasm(handle, filebuffer, size
+                  , vptr(uint64_t, option, 1, 3), 0, &insn);
 
   if (size > 0) {
-    printf("Got %zu instructions\n", size);
+    printf("%zu insts:\n", size);
   } else {
-    derror(stderr, "DISASM", cs_errno(handle));
+    dt_error(stderr, "DISASM", cs_errno(handle));
     return;
   }
 
