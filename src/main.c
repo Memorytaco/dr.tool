@@ -8,9 +8,9 @@
 
 struct store {
   char* name;
-  bool syntax;
   bool ascii;
   bool info;
+  vtra disasopt;
 };
 
 void cmd_call_help(struct cmdargt* arg, void* data, void* store) {
@@ -20,20 +20,74 @@ void cmd_call_help(struct cmdargt* arg, void* data, void* store) {
   printf("dtool <command> [option [arguments]]...\n");
   printf("  command: elf, disas\n");
   printf("  %self%s   [-h,--help,-ascii,-sec,-sym] file\n", color, endcmd);
-  printf("  %sdisas%s [-h,--help,-att,--name] file\n", color, endcmd);
+  printf("  %sdisas%s [-h,--help,-att,--name,--arch,--mode,--addr] file\n", color, endcmd);
   free(color);
   free(endcmd);
 }
 
 void cmd_call_name(struct cmdargt* arg, void* data, void* store) {
   struct store* ptr = store;
-  size_t len = 0;
-  ptr->name = cmdargt_fetch_val(arg, &len);
+  ptr->name = cmdargt_access(arg, 0, NULL);
 }
 
 void cmd_call_syntax(struct cmdargt* arg, void* data, void* store) {
   struct store* ptr = store;
-  ptr->syntax = true;
+  vptr(unsigned char, ptr->disasopt, 1, 2) = 1;
+}
+
+void cmd_call_arch(struct cmdargt* arg, void* data, void* store)
+{
+  vtra option = ((struct store*)store)->disasopt;
+  char *arch = cmdargt_access(arg, 0, NULL);
+  if (!strcmp(arch, "ARM")) {
+    vptr(enum cs_arch, option, 1, 0) = CS_ARCH_ARM;
+  } else if (!strcmp(arch, "ARM64")) {
+    vptr(enum cs_arch, option, 1, 0) = CS_ARCH_ARM64;
+  } else if (!strcmp(arch, "X86")) {
+    vptr(enum cs_arch, option, 1, 0) = CS_ARCH_X86;
+  } else if (!strcmp(arch, "help")) {
+    printf("Available arch: \n");
+    printf("ARM, ARM64, default X86.\n");
+    exit(0);
+  } else {
+    printf("INFO: Invalid arch, default to X86\n");
+    vptr(enum cs_arch, option, 1, 0) = CS_ARCH_X86;
+  }
+}
+
+void cmd_call_mode(struct cmdargt* arg, void* data, void* store)
+{
+  vtra option = ((struct store*)store)->disasopt;
+  char *mode = cmdargt_access(arg, 0, NULL);
+  if (!strcmp(mode, "64")) {
+    vptr(enum cs_mode, option, 1, 1) = CS_MODE_64;
+  } else if (!strcmp(mode, "32")) {
+    vptr(enum cs_mode, option, 1, 1) = CS_MODE_32;
+  } else if (!strcmp(mode, "16")) {
+    vptr(enum cs_mode, option, 1, 1) = CS_MODE_16;
+  } else if (!strcmp(mode, "ARM")) {
+    vptr(enum cs_mode, option, 1, 1) = CS_MODE_ARM;
+  } else if (!strcmp(mode, "ARMM")) {
+    vptr(enum cs_mode, option, 1, 1) = CS_MODE_MCLASS;
+  } else if (!strcmp(mode, "ARMT")) {
+    vptr(enum cs_mode, option, 1, 1) = CS_MODE_THUMB;
+  } else if (!strcmp(mode, "ARMV8")) {
+    vptr(enum cs_mode, option, 1, 1) = CS_MODE_V8;
+  } else if (!strcmp(mode, "help")) {
+    printf("Available modes: \n");
+    printf("default 64, 32, 16, ARM, ARMM, ARMV8, ARMT.\n");
+    exit(0);
+  } else {
+    printf("INFO: Invalid mode, default to 64\n");
+    vptr(enum cs_mode, option, 1, 1) = CS_MODE_64;
+  }
+}
+
+void cmd_call_addr(struct cmdargt* arg, void* data, void* store)
+{
+  vtra option = ((struct store*)store)->disasopt;
+  char *addr = cmdargt_access(arg, 0, NULL);
+  vptr(uint64_t, option, 1, 3) = strtol(addr, NULL, 16);
 }
 
 void cmd_call_setascii(struct cmdargt* arg, void* data, void* store) {
@@ -62,8 +116,7 @@ void cmd_call_elfsec
   }
   struct sectbl table = build_sectbl(buffer);
   free(buffer);
-  size_t len = 0;
-  int index = atoi(cmdargt_fetch_val(arg, &len));
+  int index = atoi(cmdargt_access(arg, 0, NULL));
   if (table.num < index) {
     printf( "number of entries %d,"
         " index from %d ~ %d.\n"
@@ -164,10 +217,26 @@ int main(int argc, char** argv)
     , .opt = cmd_opt_short | cmd_opt_toggle
     , .call = cmd_call_elfsym
     },
+    { .key = "arch", .code = 11
+    , .opt = cmd_opt_long
+    , .call = cmd_call_arch
+    },
+    { .key = "mode", .code = 12
+    , .opt = cmd_opt_long
+    , .call = cmd_call_mode
+    },
+    { .key = "addr", .code = 13
+    , .opt = cmd_opt_long
+    , .call = cmd_call_addr
+    },
     { .key = NULL, .code = 0, .call = NULL }
   };
   struct store* store = malloc(sizeof(struct store));
   memset(store, 0, sizeof(struct store));
+  store->disasopt = vara_alloc(dt_option);
+  vptr(enum cs_arch, store->disasopt, 1, 0) = CS_ARCH_X86;
+  vptr(enum cs_mode, store->disasopt, 1, 1) = CS_MODE_64;
+
   arglst extra = cmd_match(argc-2, argv+2, regs, store);
 
   if (strcmp("disas", argv[1])) {
@@ -178,8 +247,9 @@ int main(int argc, char** argv)
   }
 
   char *file = NULL;
-  if (argvctx(extra) <= 0) {
-    printf("Please specific one file.\n");
+  if (argvctx(extra) < 1) {
+    printf("Please provide one file.\n");
+    return -1;
   } else file = argvidx(extra, 0);
   char* name = store->name;
   if (!name) {
@@ -187,7 +257,7 @@ int main(int argc, char** argv)
   }
   size_t size=0;
   unsigned char* buf = (unsigned char*)readfile(file, &size);
-  dt_disas(name, buf, size, store->syntax);
+  dt_disas(name, buf, size, store->disasopt);
 
   return 0;
 }
