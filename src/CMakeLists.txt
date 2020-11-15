@@ -7,11 +7,17 @@ set(CMAKE_C_STANDARD 11)
 configure_file(dtool.h.in dtool.h)
 include_directories(${CMAKE_CURRENT_BINARY_DIR} . util)
 
-set(CORE cmd.c elf.c pkg.c disas.c vara.c)
+set(CORE command.c elf.c pkg.c disas.c vara.c)
 list(APPEND CORE util/file.c)
 
 add_link_options(-ldl -lcapstone)
-add_compile_options(-fPIC -Wall)
+
+if(${Debug})
+add_compile_options(-fPIC -Wall -Wextra -g)
+else()
+add_compile_options(-fPIC -Wall -Wextra)
+endif()
+
 add_library(dlib STATIC ${CORE})
 
 # one main interface and one test tool
