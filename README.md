@@ -12,9 +12,9 @@ This CommandLine Tool aims at being a generic utility framework, with each tool 
 
 ## Screen Shots
 
-[help info](https://github.com/Memorytaco/dtool/images/helpinfo.png)
+![help info](./images/helpinfo.png)
 
-[symbol list](https://github.com/Memorytaco/dtool/images/symbol.png)
+![symbol list](./images/symbol.png)
 
 well, color scheme is not very eye friendly.
 
