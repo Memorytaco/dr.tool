@@ -1,5 +1,5 @@
 #include "pkg.h"
-#include "cmd.h"
+#include "command.h"
 #include "elf.h"
 #include "vara.h"
 
