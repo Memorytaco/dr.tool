@@ -2,6 +2,22 @@
 
 This CommandLine Tool aims at being a generic utility framework, with each tool as a shared library. It provides functions as library calls, so we can build tools more easily.
 
+## Features
+
+- command alias
+- distributed packages
+- arbitrary option syntax
+- simple elf tool
+- simple disassembly tool
+
+## Screen Shots
+
+[help info](https://github.com/Memorytaco/dtool/images/helpinfo.png)
+
+[symbol list](https://github.com/Memorytaco/dtool/images/symbol.png)
+
+well, color scheme is not very eye friendly.
+
 ## How to build
 
 ``` bash
@@ -12,32 +28,30 @@ make -C build
 
 use `make -C build install` to install files to your `$HOME/.local` directory.
 
-binaries will be put under `$HOME/.local/bin` and modules will be put under `$HOME/.local/.mod`.
+binaries will be put under `$HOME/.local/bin` and packages will be put under `$HOME/.local/.mod`.
 
 remember executing `export LD_LIBRARYPATH_PATH` to add module directory path to shared libraries search path.
 
-## Current modules
+## Command Line Interface
 
-#### CMD process
+> The interface is not fully functional for now, user may take cautions when use it.
 
-It serves as a generic command line arguments parsing tool. It has dependency check between each command line option and values.
+> if it generates segmentfault or do something strange, that's because the rely relationship check function has not been implemented yet. you may try putting optional options close to command and try again or open an issue and let me know. The fix should be available in next commit.
 
-You can register function calls in a table and specific each dependency graph.
+General Syntax: `dtool subcommand [options..] values...`
 
-More Interfaces to be come in the future.
+## Packages
 
-#### capstone wrapper
+- [ ] ELF
+  > ELF query and manipulation tool, used to extract info from elf files.
+- [ ] Lua
+- [ ] Unix Calling Table Query Tool
+  > Print Linux system call table, Support syscall number query and search.
+- [ ] Yara
+  > Subset Yara rule syntax with yaml support.
+- [ ] Bit Field
+  > Display special registers' bit information. For embeded development and kernel hacking.
 
-This wrapper is a simple function integration of raw capstone calls.
+## TODO
 
-#### NET wrapper
-
-> Provide basic socket manipulation wrapper. No need to handle those low level structures.
-
-##### TODO
-
-- [ ] Add basic socket operation
-
-#### Dynamic module
-
-add module support, keep function codes seperating from mainline development tree.
+use `ack TODO` in src directory to view all TODOs.
