@@ -3,7 +3,7 @@
 #include <capstone/capstone.h>
 #include <stdbool.h>
 
-#include "cmd.h"
+#include "command.h"
 #include "vara.h"
 
 // arch:mode:syntax:start addr
