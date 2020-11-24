@@ -4,6 +4,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+// TODO: Add Guard here
+#include <unistd.h>
+
 // dynamic so file name:
 //   pkgprefix + "name" + pkgsuffix
 char * pkgsuffix = ".pkg";
@@ -21,15 +24,63 @@ struct pkg {
 
 // global register package cache
 struct {
-  char    *path;  // search path
-  pkgsig  list;  // package list
+  char    * path;     // search path
+  pkgsig    list;     // package list
 } __CACHE = { NULL , NULL };
 
 
 ///////////////////////////////////////
 // implementation for the interface. //
 ///////////////////////////////////////
+char* pkgsearch(const char *name, const char *prefix)
+{
+  const char* envsearch = getenv(SEARCH);
 
+  if (prefix != NULL) envsearch = prefix;
+  if (envsearch == NULL || name == NULL) return NULL;
+
+  size_t size = strlen(envsearch) + 1;
+  size_t namelen = strlen(name);
+  char * search = malloc(size);
+  memmove(search, envsearch, size);
+
+  char *ptr = strtok(search, SEARCHTOK);
+  do {
+    size_t len = strlen(ptr);
+    if (len == 0) {
+      ptr = strtok(NULL, SEARCHTOK);
+      continue;
+    }
+    char *buf = malloc(len + namelen + 2);
+    memset(buf, 0, len + namelen + 2);
+    memmove(buf, ptr, len);
+    if (buf[len-1] != '/') {
+      buf[len] = '/';
+      len ++;
+    }
+    memmove(buf+len, name, namelen);
+    int status = access(buf, F_OK);
+    if (status == -1) {
+      // handle failure here
+      printf("File %s doesn't exist.\n", buf);
+      free (buf);
+      ptr = strtok(NULL, SEARCHTOK);
+      continue;
+    }
+    status = access(buf, R_OK | X_OK);
+    if (status == -1) {
+      printf("File %s couldn't be readed or executed.\n", buf);
+      free (buf);
+      ptr = strtok(NULL, SEARCHTOK);
+    }
+    // handle the right case
+    free(search);
+    return buf;
+  } while (ptr != NULL);
+
+  free(search);
+  return NULL;
+}
 
 // TODO: add dependency check
 pkgsig pkgload(const char *name, enum pkgscope scop)
@@ -50,13 +101,16 @@ pkgsig pkgload(const char *name, enum pkgscope scop)
   char *libname = malloc(totallen);
   snprintf(libname, totallen, "%s%s%s", pkgprefix, name, pkgsuffix);
 
+  char *fullpath = pkgsearch(libname, NULL);
   switch (scop) {
     case PKGGLOBAL:
-      sig->dl = dlopen(libname, RTLD_LAZY | RTLD_GLOBAL | RTLD_NODELETE);
+      sig->dl = dlopen(fullpath ? fullpath: libname
+          , RTLD_LAZY | RTLD_GLOBAL | RTLD_NODELETE);
       break;
     default:
     case PKGPRIVATE:
-      sig->dl = dlopen(libname, RTLD_LAZY | RTLD_LOCAL | RTLD_DEEPBIND);
+      sig->dl = dlopen(fullpath ? fullpath: libname
+          , RTLD_LAZY | RTLD_LOCAL | RTLD_DEEPBIND);
       break;
   }
 
@@ -85,6 +139,7 @@ pkgsig pkgload(const char *name, enum pkgscope scop)
   free(libname);
   free(metaname);
   free(regname);
+  free(fullpath);
 
   sig->next = __CACHE.list;
   __CACHE.list = sig;

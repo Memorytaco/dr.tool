@@ -1,6 +1,10 @@
 #ifndef DTOOLPKG
 #define DTOOLPKG
 
+/* Search path is ":" seperated */
+#define SEARCHTOK ":"
+#define SEARCH "DTOOLPKGSEARCH"
+
 // provided user interface
 enum pkgui {
   PKGSERVE      = 0x01, // use uniform interface providing function
