@@ -304,17 +304,21 @@ int main(int argc, char** argv)
     char *title = setcmd('m', 3, 38, 5, 130);
     char *author = setcmd('m', 3, 38, 5, 15);
     char *reset = setcmd('m', 1, 0);
+    char *green = setcmd('m', 3, 38, 5, 82);
+    char *bold = setcmd('m', 1, 1);
     printf("%sDtool %s(github.com/Memorytaco) %s"
             DTOOLVERSION "\n"
           , title, author, reset);
-    printf("Usage: %s {command} [option].. [argument]..\n"
-          , argv[0]);
-    printf("Buildin commands: ");
+    printf("Usage: %s%s%s {command} [option].. [argument]..\n"
+          , bold
+          , argv[0]
+          , reset);
+    printf("Commands: ");
     for (Command *c = builtin_cmds; c->command != NULL; c++) {
       printf("%s%s", c->command, (c+1)->command == NULL?" .\n":", ");
     }
     for (Command *c = builtin_cmds; c->command != NULL; c++) {
-      printf("  %s:\n", c->command);
+      printf("  %s%s%s%s:\n", bold, green, c->command, reset);
       printf("     %s\n", c->info);
     }
     printf("\n");
@@ -326,6 +330,8 @@ int main(int argc, char** argv)
     free(title);
     free(author);
     free(reset);
+    free(green);
+    free(bold);
   }
   return 0;
 }
