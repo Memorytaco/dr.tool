@@ -97,7 +97,7 @@ void cmd_call_elfsec
   struct store* ptr = store;
   char *file = NULL;
   if (argvctx(data) <= 0) {
-    logChannelColor(Warn, "[{220}Warn{0}] Lack file name\n");
+    logChannelColor(Warn, "[{221}Warn{0}] Lack file name\n");
     return;
   }
   else file = argvidx(data, 0);
@@ -131,7 +131,7 @@ void cmd_call_elfsec
     vptr(int, para, 1, 2) = size;
     pkgsig sig = pkgload("elf", PKGGLOBAL);
     if (sig == NULL) {
-      logChannelColor(Alert, "[{196}Error{0}] failed loading package\n");
+      logChannelColor(Alert, "[{197}Error{0}] failed loading package\n");
       exit(-1);
     }
     pkgsetvar(sig, para);
@@ -151,12 +151,12 @@ void cmd_call_elfsym
   size_t size;
   char* buffer = NULL;
   if (argvctx(data) == 0) {
-    logChannelColor(Warn, "[{220}Warn{0}] Lack File name.\n");
+    logChannelColor(Warn, "[{221}Warn{0}] Lack File name.\n");
     exit(1);
   }
   buffer = readfile(argvidx(data, 0), &size);
   if (buffer == NULL) {
-    logChannelColor(Alert, "[{196}Error{0}] File %s doesn't exist!\n", argvidx(data, 0));
+    logChannelColor(Alert, "[{197}Error{0}] File %s doesn't exist!\n", argvidx(data, 0));
     exit(-1);
   }
   struct sectbl tbl = build_sectbl(buffer);
@@ -278,7 +278,7 @@ struct command builtin_cmds[] = {
 
 void disascmd(int argc, char **argv, void* store) {
   if (argc == 0) {
-    logChannelColor(Warn, "[{220}Warn{0}] Please provide one file.\n");
+    logChannelColor(Warn, "[{221}Warn{0}] Please provide one file.\n");
     return ;
   }
   char *file = argv[0];
