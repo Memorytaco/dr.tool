@@ -7,7 +7,7 @@ set(CMAKE_C_STANDARD 11)
 configure_file(dtool.h.in dtool.h)
 include_directories(${CMAKE_CURRENT_BINARY_DIR} . util)
 
-set(CORE command.c elf.c pkg.c disas.c vara.c)
+set(CORE command.c elf.c pkg.c disas.c vara.c log.c)
 list(APPEND CORE util/file.c)
 
 add_link_options(-ldl -lcapstone)
