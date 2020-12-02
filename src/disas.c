@@ -1,4 +1,5 @@
 #include "disas.h"
+#include "log.h"
 
 void dt_error(FILE* s, const char* const msg, cs_err code)
 {
@@ -8,16 +9,12 @@ void dt_error(FILE* s, const char* const msg, cs_err code)
 // @syntax: true for ATT, false for Intel. Default is Intel.
 void dt_disas(char* name, unsigned char* filebuffer, size_t size, void *option)
 {
-  // prepare commandline setting
-  char *color = setcmd('m', 3, 38, 5, 153);
-  char *endcmd = setcmd('m', 1, 0);
-
   // init capstone virtual machine
   csh handle = 0;
   cs_err err = CS_ERR_OK;
 
   if (strcmp(vara_name(option), "Disas")) {
-    printf("Invalid Option Paremeter\n");
+    logChannelColor(Alert, "[{197}Error{0}] Invalid Option Parameter\n");
     return;
   }
 
@@ -37,13 +34,13 @@ void dt_disas(char* name, unsigned char* filebuffer, size_t size, void *option)
     dt_error(stderr, "SETTINGSYNTAX", err);
     return;
   }
-  printf("%s%s%s size: %zu:\n", color, name, endcmd, size);
+  logInfoColor("{154}%s{0} size: %zu:\n", name, size);
   cs_insn *insn = NULL;
   size = cs_disasm(handle, filebuffer, size
                   , vptr(uint64_t, option, 1, 3), 0, &insn);
 
   if (size > 0) {
-    printf("%zu insts:\n", size);
+    logInfo("%zu insts:\n", size);
   } else {
     dt_error(stderr, "DISASM", cs_errno(handle));
     return;
@@ -53,12 +50,10 @@ void dt_disas(char* name, unsigned char* filebuffer, size_t size, void *option)
   while (count < size)
   {
     cs_insn *val = insn + count;
-    printf("0x%08lX  %15s  %-20s\n", val->address, val->mnemonic, val->op_str);
+    logInfo("0x%08lX  %15s  %-20s\n", val->address, val->mnemonic, val->op_str);
     count ++;
   }
 
-  free(color);
-  free(endcmd);
   cs_free(insn, size);
   cs_close(&handle);
 }
