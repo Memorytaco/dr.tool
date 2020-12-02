@@ -225,7 +225,7 @@ int logInfoColor(const char* format, ...)
   __LogInit();
   va_list ap;
   va_start(ap, format);
-  int ret = vlogChannel(Normal, format, ap);
+  int ret = vlogChannelColor(Normal, format, ap);
   va_end(ap);
   return ret;
 }
