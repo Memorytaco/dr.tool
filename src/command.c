@@ -740,13 +740,15 @@ ArgcArgv* cmdspec_match
   return extra;
 }
 
+// find cmd in a command list seperated by ' '.
 bool match_cmd(const char * cmds, const char * cmd) {
-  char * i = cmds;
+  const char * i = cmds;
   size_t cmdlen = strlen(cmd);
   do {
     if (!strncmp(cmds, cmd, cmdlen))
       return true;
-  } while (i = strchr(cmds, ' ') + 1 && i != 1);
+  } while ((i = strchr(cmds, ' ')) && i++);
+  // ^ i shouldn't be null, then point i to next char.
   return false;
 }
 
@@ -857,7 +859,10 @@ static Unit* Unitix(const Unit *u, size_t ix)
   for (; u != NULL && ix > 0; ix--) {
     u = u->next;
   }
-  return u;
+  return (Unit *)u;
+  // the function itself doesn't modify Unit, but
+  // caller should be able to modify its return value.
+  // so do a type cast in return statement.
 }
 
 static size_t Unitcx(const Unit *u)

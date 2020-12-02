@@ -139,9 +139,9 @@ char const* sectbl_getname(struct sectbl const * tb, size_t idx)
 
 size_t sectbl_search(struct sectbl const * tb, char* name)
 {
-  for (size_t i = 1; i<tb->num; i++) {
+  for (int i = 1; i<tb->num; i++) {
     if (!strcmp(name, sectbl_getname(tb, i)))
-      return i;
+      return (size_t)i;
   }
   return 0;
 }

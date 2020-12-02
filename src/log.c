@@ -308,10 +308,10 @@ char *sprintfCSI(const char *format, const struct CSI *csi, size_t limit)
         cur += len;
         len = 0;
       }
-      size_t ix = matchbrace(cur, &sub, &len);
+      long ix = matchbrace(cur, &sub, &len);
       if (ix != -1) {
         cur = sub;
-        sub = CSIformat(csi[ix>=limit?0:ix], &len);
+        sub = CSIformat(csi[((size_t)ix)>=limit?0:ix], &len);
         if (len + bufsize >= size) {
           size += size;
           buf = reallocarray(buf, size, sizeof(char));
@@ -344,13 +344,19 @@ char* saprintf(const char *format, ...)
 
   size_t size = 32;
   char * ret = calloc(size, sizeof(char));
-  int remain = vsnprintf(ret, size, format, ap);
-  if (remain >= size) {
+  long remain = vsnprintf(ret, size, format, ap);
+  // we cast size to int, because remain could be
+  // negative.
+  // TODO: Need a better logic here to handle type cast
+  if (remain >= (long)size) {
     size = (size_t) remain + 1;
     ret = reallocarray(ret, size, sizeof(char));
     remain = vsnprintf(ret, size, format, aq);
-    assert(remain == size - 1);
-  } else if (remain >= 0 && remain < size) {
+    // here, remain is positive, it is
+    // safe to cast it to size_t.
+    assert((size_t)remain == size - 1);
+    // same reason for condition below
+  } else if (remain >= 0 && remain < (long)size) {
     ret = reallocarray(ret, remain + 1, sizeof(char));
   } else {
     free(ret);
@@ -370,13 +376,14 @@ char* vsaprintf(const char *format, va_list ap)
 
   size_t size = 32;
   char * ret = calloc(size, sizeof(char));
-  int remain = vsnprintf(ret, size, format, ap);
-  if (remain >= size) {
+  long remain = vsnprintf(ret, size, format, ap);
+  // TODO: Need a better logic here
+  if (remain >= (long)size) {
     size = (size_t) remain + 1;
     ret = reallocarray(ret, size, sizeof(char));
     remain = vsnprintf(ret, size, format, aq);
-    assert(remain == size - 1);
-  } else if (remain >= 0 && remain < size){
+    assert((size_t)remain == size - 1);
+  } else if (remain >= 0 && (size_t)remain < size){
     ret = reallocarray(ret, remain + 1, sizeof(char));
   } else {
     free(ret);
