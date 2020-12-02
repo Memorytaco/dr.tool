@@ -5,6 +5,7 @@
 #include "vara.h"
 #include "disas.h"
 #include "util/file.h"
+#include "log.h"
 
 struct store {
   char* name;
@@ -34,11 +35,11 @@ void cmd_call_arch(Arg* arg, void* data, void* store)
   } else if (!strcmp(arch, "X86")) {
     vptr(enum cs_arch, option, 1, 0) = CS_ARCH_X86;
   } else if (!strcmp(arch, "help")) {
-    printf("Available arch: \n");
-    printf("ARM, ARM64, default X86.\n");
+    logInfo("Available arch: \n");
+    logInfo("ARM, ARM64, default X86.\n");
     exit(0);
   } else {
-    printf("INFO: Invalid arch, default to X86\n");
+    logInfoColor("[{82}INFO{0}] Invalid arch, default to X86\n");
     vptr(enum cs_arch, option, 1, 0) = CS_ARCH_X86;
   }
 }
@@ -62,11 +63,11 @@ void cmd_call_mode(Arg* arg, void* data, void* store)
   } else if (!strcmp(mode, "ARMV8")) {
     vptr(enum cs_mode, option, 1, 1) = CS_MODE_V8;
   } else if (!strcmp(mode, "help")) {
-    printf("Available modes: \n");
-    printf("default 64, 32, 16, ARM, ARMM, ARMV8, ARMT.\n");
+    logInfo("Available modes: \n");
+    logInfo("default 64, 32, 16, ARM, ARMM, ARMV8, ARMT.\n");
     exit(0);
   } else {
-    printf("INFO: Invalid mode, default to 64\n");
+    logInfoColor("[{82}INFO{0}] Invalid mode, default to 64\n");
     vptr(enum cs_mode, option, 1, 1) = CS_MODE_64;
   }
 }
@@ -96,7 +97,7 @@ void cmd_call_elfsec
   struct store* ptr = store;
   char *file = NULL;
   if (argvctx(data) <= 0) {
-    printf("Lack file name\n");
+    logChannelColor(Warn, "[{220}Warn{0}] Lack file name\n");
     return;
   }
   else file = argvidx(data, 0);
@@ -109,7 +110,7 @@ void cmd_call_elfsec
   free(buffer);
   int index = atoi(Argvix(arg, 0, NULL));
   if (table.num < index) {
-    printf( "number of entries %d,"
+    logInfo( "number of entries %d,"
         " index from %d ~ %d.\n"
         , table.num, 0, table.num-1);
     return;
@@ -119,18 +120,18 @@ void cmd_call_elfsec
   if (table.class == 32) size = hdr.shdr_32->sh_size;
   else size = hdr.shdr_64->sh_size;
   if (size == 0) {
-    printf("The number %d Section has size 0.\n", index);
+    logInfo("The number %d Section has size 0.\n", index);
     return;
   }
   if (ptr->ascii) {
-    printf("%s: %zd | %08zX\n", sectbl_getname(&table, index), size, size);
+    logInfo("%s: %zd | %08zX\n", sectbl_getname(&table, index), size, size);
     vtra para = vara_alloc("elf:@D2");
     vptr(void*, para, 1, 0) = table.ents[index].sec;
     vptr(int, para, 1, 1) = 16;
     vptr(int, para, 1, 2) = size;
     pkgsig sig = pkgload("elf", PKGGLOBAL);
     if (sig == NULL) {
-      printf("Error when loading package\n");
+      logChannelColor(Alert, "[{196}Error{0}] failed loading package\n");
       exit(-1);
     }
     pkgsetvar(sig, para);
@@ -150,12 +151,12 @@ void cmd_call_elfsym
   size_t size;
   char* buffer = NULL;
   if (argvctx(data) == 0) {
-    printf("Lack File name.\n");
+    logChannelColor(Warn, "[{220}Warn{0}] Lack File name.\n");
     exit(1);
   }
   buffer = readfile(argvidx(data, 0), &size);
   if (buffer == NULL) {
-    printf("File %s doesn't exist!\n", argvidx(data, 0));
+    logChannelColor(Alert, "[{196}Error{0}] File %s doesn't exist!\n", argvidx(data, 0));
     exit(-1);
   }
   struct sectbl tbl = build_sectbl(buffer);
@@ -277,7 +278,7 @@ struct command builtin_cmds[] = {
 
 void disascmd(int argc, char **argv, void* store) {
   if (argc == 0) {
-    printf("Please provide one file.\n");
+    logChannelColor(Warn, "[{220}Warn{0}] Please provide one file.\n");
     return ;
   }
   char *file = argv[0];
@@ -301,37 +302,26 @@ int main(int argc, char** argv)
     cmd_match(argc-1, (const char**)(argv+1), builtin_cmds, store);
 
   if (status == -1) {
-    char *title = setcmd('m', 3, 38, 5, 130);
-    char *author = setcmd('m', 3, 38, 5, 15);
-    char *reset = setcmd('m', 1, 0);
-    char *green = setcmd('m', 3, 38, 5, 82);
-    char *bold = setcmd('m', 1, 1);
-    printf("%sDtool %s(github.com/Memorytaco) %s"
-            DTOOLVERSION "\n"
-          , title, author, reset);
-    printf("Usage: %s%s%s {command} [option].. [argument]..\n"
-          , bold
-          , argv[0]
-          , reset);
-    printf("Commands: ");
+    logInfoColor("{230}Dr.tool{0} {255}(github.com/Memorytaco){0} "
+                  DTOOLVERSION "\n");
+    logInfoColor("Usage: {215}%s{0} "
+                 "{command} [option].. [argument]..\n"
+                , argv[0]);
+    logInfo("Commands: ");
     for (Command *c = builtin_cmds; c->command != NULL; c++) {
-      printf("%s%s", c->command, (c+1)->command == NULL?" .\n":", ");
+      logInfo("%s%s", c->command
+                    , (c+1)->command == NULL?" .\n":", ");
     }
     for (Command *c = builtin_cmds; c->command != NULL; c++) {
-      printf("  %s%s%s%s:\n", bold, green, c->command, reset);
-      printf("     %s\n", c->info);
+      logInfoColor("  {156}%s{0}:\n", c->command);
+      logInfo("     %s\n", c->info);
     }
-    printf("\n");
+    logInfo("\n");
     for (Command *c = builtin_cmds; c->command != NULL; c++) {
       cmdshortinfo(c);
       if ((c+1)->command != NULL)
-        printf("\n");
+        logInfo("\n");
     }
-    free(title);
-    free(author);
-    free(reset);
-    free(green);
-    free(bold);
   }
   return 0;
 }
