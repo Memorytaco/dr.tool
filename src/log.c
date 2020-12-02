@@ -74,7 +74,11 @@ void __LogInit()
   // prepare the output table
   for (int i = 1; i <= 512; i++) {
     ColorTable[i].end = 'm';
-    ColorTable[i].para = saprintf("%d;%d;%d", i>256?48:38, 5, i<=256?i:i-256);
+    ColorTable[i].para =
+      saprintf("%d;%d;%d"
+            , i<=256?38:48
+            , 5
+            , i<=256?i-1:i-257);
   }
   ColorTable[513] = (struct CSI) CSIEND;
 }
