@@ -13,25 +13,31 @@ enum Channel {
   BlackHole = 0xFF00
 };
 
-struct LogCSI {
+struct CSI {
   const char* para; 
   const char* inte;
   char end;
 };
 
-#define LOGCSIDEC   (struct LogCSI *)
-#define LOGCSIEND   { NULL, NULL, 0 }
+// Global ColorTable
+// 256 foreground color and 256 background color
+//
+// Warn: Use it after logInit();
+extern struct CSI* ColorTable;
+
+#define CSIDEC   (struct CSI *)
+#define CSIEND   { NULL, NULL, 0 }
 
 int   logInfo(const char* format, ...);
-int   logInfoCSI(const char* format, ...);
+int   logInfoColor(const char* format, ...);
 
 int   logChannel(enum Channel chl, const char* format, ...);
-int   logChannelCSI(enum Channel chl, struct LogCSI*, const char* format, ...);
+int   logChannelCSI(enum Channel chl, const struct CSI*, const char* format, ...);
 int   logChannelColor(enum Channel chl, const char* format, ...);
-void  redirectChannel(enum Channel from, enum Channel to);
-void  setChannel(enum Channel chl, FILE* f);
-// Not Ready
-void  setChannelToBuf(enum Channel chl);
-char* getChannelBuf(enum Channel chl);
+void  redirectChannel(enum Channel from, enum Channel to); // TODO
+void  setChannel(enum Channel chl, FILE* f); // TODO
+void  setChannelToBuf(enum Channel chl); // TODO
+char* getChannelBuf(enum Channel chl); // TODO
 
+void logInit();
 #endif

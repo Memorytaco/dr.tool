@@ -28,16 +28,27 @@ static struct ChannelEntity {
 , Channel_Debug
 , Black_Hole;
 
+static void __LogInit();
+
 static long matchbrace(const char *cur,char **endptr, size_t *len);
-char* sprintfCSI(char *format, struct LogCSI *csi, size_t limit);
-char* CSIformat(struct LogCSI csi, size_t *len);
+char* sprintfCSI(const char *format, const struct CSI *csi, size_t limit);
+char* CSIformat(struct CSI csi, size_t *len);
 char* saprintf(const char *format, ...);
 char* vsaprintf(const char *format, va_list);
 size_t ChannelWrite(const char* buf, struct ChannelEntity *chl);
+int vlogChannel(enum Channel chl, const char* format, va_list ap);
+int vlogChannelColor(enum Channel chl, const char* format, va_list ap);
 
-static struct LogCSI* ColorTable;
+size_t CSIlength(const struct CSI *table);
 
-static void __LogInit()
+struct CSI* ColorTable;
+
+void logInit()
+{
+  __LogInit();
+}
+
+void __LogInit()
 {
   static bool isinit = false;
   if (isinit) return;
@@ -56,7 +67,7 @@ static void __LogInit()
   Channel_Alert.ident = StdFile;
   Channel_Alert.out.file = stderr;
 
-  ColorTable = calloc(513, sizeof(struct LogCSI));
+  ColorTable = calloc(514, sizeof(struct CSI));
   ColorTable[0].para = "0";
   ColorTable[0].end = 'm';
 
@@ -64,10 +75,11 @@ static void __LogInit()
   for (int i = 1; i <= 512; i++) {
     ColorTable[i].end = 'm';
     ColorTable[i].para = saprintf("%d;%d;%d", i>256?48:38, 5, i<=256?i:i-256);
-    /* printf("%s, len %zu\n", ColorTable[i].para, strlen(ColorTable[i].para)); */
   }
+  ColorTable[513] = (struct CSI) CSIEND;
 }
 
+// TODO
 void setChannel(enum Channel chl, FILE* f)
 {
   __LogInit();
@@ -89,14 +101,58 @@ void setChannel(enum Channel chl, FILE* f)
   }
 }
 
+int vlogChannelColor(enum Channel chl, const char* format, va_list ap)
+{
+  if (format == NULL) return 0;
+  char *str = vsaprintf(format, ap);
+  char *out =
+    sprintfCSI(str, ColorTable, CSIlength(ColorTable));
+  size_t ret = 0;
+  switch (chl) {
+    default:
+    case Default:
+      ret = ChannelWrite(out, &Channel_Default);
+      break;
+    case Normal:
+      ret = ChannelWrite(out, &Channel_Normal);
+      break;
+    case Warn:
+      ret = ChannelWrite(out, &Channel_Warn);
+      break;
+    case Alert:
+      ret = ChannelWrite(out, &Channel_Alert);
+      break;
+    case Debug:
+      ret = ChannelWrite(out, &Channel_Debug);
+      break;
+    case BlackHole:
+      ret = ChannelWrite(out, &Black_Hole);
+      break;
+  }
+  free(str);
+  free(out);
+  return ret;
+}
+
 int logChannelColor(enum Channel chl, const char* format, ...)
 {
   __LogInit();
   va_list ap;
   va_start(ap, format);
+  int ret = vlogChannelColor(chl, format, ap);
+  va_end(ap);
+  return ret;
+}
+
+int logChannelCSI(enum Channel chl, const struct CSI* table, const char* format, ...)
+{
+  __LogInit();
+  if (format == NULL) return 0;
+  va_list ap;
+  va_start(ap, format);
   char * toformat = vsaprintf(format, ap);
-  char * final = sprintfCSI(toformat, ColorTable, 513);
-  size_t ret = 0;
+  char * final = sprintfCSI(toformat, table, CSIlength(table));
+  int ret = 0;
   switch (chl) {
     default:
     case Default:
@@ -124,9 +180,69 @@ int logChannelColor(enum Channel chl, const char* format, ...)
   return ret;
 }
 
+int vlogChannel(enum Channel chl, const char* format, va_list ap)
+{
+  if (format == NULL) return 0;
+  char * str = vsaprintf(format, ap);
+  int ret = 0;
+  switch (chl) {
+    default:
+    case Default:
+      ret = ChannelWrite(str, &Channel_Default);
+      break;
+    case Normal:
+      ret = ChannelWrite(str, &Channel_Normal);
+      break;
+    case Warn:
+      ret = ChannelWrite(str, &Channel_Warn);
+      break;
+    case Alert:
+      ret = ChannelWrite(str, &Channel_Alert);
+      break;
+    case Debug:
+      ret = ChannelWrite(str, &Channel_Debug);
+      break;
+    case BlackHole:
+      ret = ChannelWrite(str, &Black_Hole);
+      break;
+  }
+  free(str);
+  return ret;
+}
+
+int logInfo(const char* format, ...)
+{
+  __LogInit();
+  va_list ap;
+  va_start(ap, format);
+  int ret = vlogChannel(Normal, format, ap);
+  va_end(ap);
+  return ret;
+}
+
+int logInfoColor(const char* format, ...)
+{
+  __LogInit();
+  va_list ap;
+  va_start(ap, format);
+  int ret = vlogChannel(Normal, format, ap);
+  va_end(ap);
+  return ret;
+}
+
+int logChannel(enum Channel chl, const char* format, ...)
+{
+  __LogInit();
+  va_list ap;
+  va_start(ap, format);
+  int ret = vlogChannel(chl, format, ap);
+  va_end(ap);
+  return ret;
+}
+
 // length doesn't include \0
 // return \0 terminated string, should be freed after using
-char* CSIformat(struct LogCSI csi, size_t *len)
+char* CSIformat(struct CSI csi, size_t *len)
 {
   size_t paralen = csi.para?strlen(csi.para):0;
   size_t intelen = csi.inte?strlen(csi.inte):0;
@@ -167,9 +283,9 @@ long matchbrace(const char *cur, char **endptr, size_t *len)
   return ret;
 }
 
-char *sprintfCSI(char *format, struct LogCSI *csi, size_t limit)
+char *sprintfCSI(const char *format, const struct CSI *csi, size_t limit)
 {
-  static struct LogCSI reset = { "0", NULL, 'm' };
+  static struct CSI reset = { "0", NULL, 'm' };
   if (format == NULL || strlen(format) == 0) return NULL;
   // FIXME
   if (csi == NULL || limit == 0) { csi = &reset; limit = 1; }
@@ -177,7 +293,7 @@ char *sprintfCSI(char *format, struct LogCSI *csi, size_t limit)
   size_t size = formatlen;
   char * buf = calloc(size, sizeof(char));
   size_t bufsize = 0;
-  char *cur = format;
+  const char *cur = format;
   size_t len = 0;
   while (cur + len < format + formatlen) {
     char * sub = NULL;
@@ -283,4 +399,14 @@ size_t ChannelWrite(const char* buf, struct ChannelEntity *chl)
       break;
   }
   return 0;
+}
+
+size_t CSIlength(const struct CSI *table)
+{
+  if (table == NULL) return 0;
+  size_t len = 0;
+  while (table[len].end != 0) {
+    len ++;
+  }
+  return len;
 }
