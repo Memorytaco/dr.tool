@@ -302,7 +302,7 @@ static VType* buildbits(char const *d, size_t *len)
   unsigned char id = 0;   // aggr id accumulator
 
   unsigned char num = 0;  // for the number building
-  char *di = d; // @d string index pointer
+  const char *di = d;     // @d string index pointer
   while (di < d + clen) {
     unsigned char oct = 0;  // oct field value
     switch(*di) {
