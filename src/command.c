@@ -5,105 +5,13 @@
 #include <assert.h>
 #include <stdint.h>
 
+#include "log.h"
+
 #define PREFIX(p, v) p ## v
 
 /////////////////////////////////
-// 1. Command Line Escape Code //
+// Command Line User Interface //
 /////////////////////////////////
-
-static const char* cmd_prefix = "\033[";
-
-char* setcmd(char cmd, int argc, ...)
-{
-#define CMD_LENGTH 16
-  char* buf = malloc(CMD_LENGTH);
-  size_t blklen = 1;
-  size_t buflen = 0;
-
-  buflen = strlen(cmd_prefix);
-  memmove(buf, cmd_prefix, buflen);
-
-  va_list ap;
-  va_start(ap, argc);
-  for (int i = 0; i < argc; i++) {
-    int val = va_arg(ap, int);
-    int len = 0;
-redo:
-    len = snprintf(buf+buflen, blklen * CMD_LENGTH - buflen
-        ,"%d%c" ,val, i+1==argc ? cmd : ';');
-    if (len + buflen >= blklen * CMD_LENGTH) {
-      // snprintf success only if (len + buflent < blklen * CMD_LENGTH)
-      // and it will also copy 0 endmarker to buffer but return
-      // string length without 0 endmarker.
-      // query c11 standard for information of snprintf
-      blklen ++;
-      buf = realloc(buf, blklen * CMD_LENGTH);
-      goto redo;
-    }
-    buflen += len;
-  }
-  buf = realloc(buf, buflen+1); // include the
-  va_end(ap);
-  return buf;
-#undef CMD_LENGTH
-}
-
-char* setcolor(int type, int color, const char* const src, int offset, int len)
-{
-  char *cmd = setcmd('m', 3, type, 5, color);
-  size_t cmdlen = strlen(cmd);
-  char *buf = malloc(cmdlen + len + 1);
-  memmove(buf, cmd, cmdlen);
-  free(cmd);
-  memmove(buf+cmdlen, src+offset, len);
-  buf[cmdlen+len] = 0;
-  return buf;
-}
-
-inline char* setforecolor
-(int color, const char* const src, int offset, int len)
-{ return setcolor(38, color, src, offset, len); }
-inline char* setbackcolor
-(int color, const char* const src, int offset, int len)
-{ return setcolor(48, color, src, offset, len); }
-
-char* strnjoin(int num, ...)
-{
-  va_list ap;
-  va_start(ap, num);
-
-  size_t total = 0;
-  struct slice {
-    void *buf;
-    size_t len;
-  } *sarry;
-  sarry = malloc(sizeof(struct slice) * num);
-  for (int i = 0; i < num; i++) {
-    char *str = va_arg(ap, char*);
-    size_t len = va_arg(ap, size_t);
-    sarry[i].buf = str;
-    sarry[i].len = len;
-    total += len;
-  }
-  va_end(ap);
-
-  char* buf = malloc(total+1);
-  total = 0;
-  for (int i = 0; i < num; i++) {
-    memmove(buf + total, sarry[i].buf, sarry[i].len);
-    total += sarry[i].len;
-  }
-
-  buf[total] = 0;
-  free(sarry);
-  return buf;
-}
-
-
-
-////////////////////////////////////
-// 2. Command Line User Interface //
-////////////////////////////////////
 
 /*
  *  principle:
@@ -353,7 +261,8 @@ static Unit * buildUnit
   isval = *valbool;
 
   if (str == NULL) {
-    printf("Str shouldn't be null, at file command.c line %d\n"
+    logChannel(Debug
+        , "Str shouldn't be null, at file command.c line %d\n"
         , __LINE__);
     return NULL;
   }
@@ -621,10 +530,6 @@ ArgcArgv* cmdspec_match
 
   cvinit(argc, argv); // init iterator
 
-  char * warn = setcmd('m', 3, 38, 5, 226);
-  char * error = setcmd('m', 3, 38, 5, 160);
-  char * reset = setcmd('m', 1, 0);
-
   // start processing char** and build Unit from these strings
   for (const char *para = cvget(); para != NULL; para = cvget()) {
     if (head == NULL) {
@@ -652,8 +557,9 @@ ArgcArgv* cmdspec_match
     enum genret genreinfo = genre_null;
     SpecSearchRes search = cmdspec_search(ptr->name, &genreinfo, desc);
     if (search.specdesc == NULL) {
-      printf("%sWARN!!%s Unrecognized Option %s, ignore...\n"
-            , warn, reset, ptr->name);
+      logChannelColor(Warn
+          , "[{227}WARN{0}] Unrecognized Option %s, ignore...\n"
+          , ptr->name);
       ptr = Unitalloc(ptr, NULL, 0);
       continue;
     }
@@ -671,19 +577,18 @@ ArgcArgv* cmdspec_match
 
       para = cvget();
       if (para == NULL) {
-        printf(
-            "%sError!!%s "
-            "Require one more Arguments, but none.\n"
-            , error, reset);
+        logChannelColor(Alert
+            , "[{197}Error{0}] "
+              "Require one more arguments, but none.\n");
         exit(1);
       }
       Unit *tmp = buildUnit(para, ptr, &opt, &valbool);
       if (tmp != ptr) {
         // the new value is an option and not a value.
-        printf(
-            "%sError!!%s "
-            "expected one value for %s, but got option %s\n"
-            , error, reset, ptr->name, tmp->name);
+        logChannelColor(Alert
+            , "[{197}Error{0}] "
+              "expect one value for %s, but got option %s\n"
+            , ptr->name, tmp->name);
         exit(1);
       }
       Invokeadd(inv, search.specdesc->spec, search.aliadesc->alia, ptr);
@@ -707,26 +612,22 @@ ArgcArgv* cmdspec_match
       }
       para = cvget();
       if (para == NULL) {
-        printf(
-            "%sError!!%s "
-            "Require one more Arguments, but none.\n"
-            , error, reset);
+        logChannelColor(Alert
+            , "[{197}Error{0}] "
+              "Require one more Arguments, but none.\n");
         exit(1);
       }
       Unit *tmp = buildUnit(para, ptr, &opt, &valbool);
       if (tmp != ptr) {
-        printf("%sError!!%s "
-            "Expected one value for %s, but got option %s\n"
-            , error, reset, ptr->name, tmp->name);
+        logChannelColor(Alert
+            , "[{197}Error{0}] "
+              "Expect one value for %s, but got option %s\n"
+            , ptr->name, tmp->name);
         exit(1);
       }
       Invokeadd(inv, search.specdesc->spec, search.aliadesc->alia, ptr);
     }
   }
-
-  free(error);
-  free(reset);
-  free(warn);
 
   ArgcArgv *extra = buildArgcArgv(head);
   InvokeCVSet(inv, extra);
@@ -755,14 +656,6 @@ void cmdshortinfo(Command *cmd)
 {
   size_t count = 8;
   size_t ix = 0;
-  static char * reset = NULL;
-  static char * category = NULL;
-  static char * option = NULL;
-  static char * info = NULL;
-  reset = reset?reset:setcmd('m', 1, 0);
-  category = category?category:setcmd('m', 3, 38, 5, 98);
-  option = option?option:setcmd('m', 3, 38, 5, 155);
-  info = info?info:setcmd('m', 3, 38, 5, 202);
 
   if (cmd == NULL || cmd->command == NULL) return;
   SpecDesc ** desc = calloc(count, sizeof(void*));
@@ -774,28 +667,20 @@ void cmdshortinfo(Command *cmd)
       desc = reallocarray(desc, count, sizeof(void*));
     }
   }
-  printf("command alia:: %s\n", cmd->command);
+  logInfo("command alia:: %s\n", cmd->command);
   for (size_t i = 0; i < ix; i++) {
     // cateogry output
-    printf("  %s::%-10.10s%s\n"
-          , category
-          , desc[i]->spec->optname
-          , reset);
+    logInfoColor("  {100}::%-10.10s{0}\n", desc[i]->spec->optname);
     for (AliaDesc ** a = desc[i]->alias; *a != NULL; a++) {
-      printf("    :: (%s) ::\n", (*a)->alia->alia);
-      printf("       ");
+      logInfo("    :: (%s) ::\n", (*a)->alia->alia);
+      logInfo("       ");
       for (AliaToken ** tk = (*a)->tokens; *tk != NULL; tk++) {
-        printf("{%.2s} %s%s%s%s"
+        logInfoColor("{%.2s} {155}%s{0}%s"
               , genre_toggle&((*tk)->genre)?" T":"  "
-              , option
               , (*tk)->name
-              , reset
               , *(tk+1)==NULL?" .\n":", ");
       }
-      printf("    %s%s%s\n"
-            , info
-            , (*a)->alia->desc
-            , reset);
+      logInfoColor("    {202}%s{0}\n", (*a)->alia->desc);
     }
   }
   free(desc);
