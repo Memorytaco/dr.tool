@@ -742,13 +742,12 @@ ArgcArgv* cmdspec_match
 
 // find cmd in a command list seperated by ' '.
 bool match_cmd(const char * cmds, const char * cmd) {
-  const char * i = cmds;
   size_t cmdlen = strlen(cmd);
   do {
     if (!strncmp(cmds, cmd, cmdlen))
       return true;
-  } while ((i = strchr(cmds, ' ')) && i++);
-  // ^ i shouldn't be null, then point i to next char.
+  } while ((cmds = strchr(cmds, ' ')) && cmds++);
+  // ^ cmds shouldn't be null, then move cmds to next char.
   return false;
 }
 
