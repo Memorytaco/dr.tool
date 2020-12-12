@@ -4,6 +4,8 @@
 #include <stdio.h>
 #include <stdarg.h>
 
+#define DEBUGLOG "DTOOLDEBUG"
+
 enum Channel {
   Default =   0x00,
   Normal  =   0x01,
