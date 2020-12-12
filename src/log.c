@@ -1,4 +1,5 @@
 #include "log.h"
+#include "dynamix.h"
 
 #include <stdarg.h>
 #include <string.h>
@@ -58,11 +59,21 @@ void __LogInit()
   if (Black_Hole.out.file == NULL) {
     Black_Hole.out.file = tmpfile();
   }
-  Channel_Debug = Black_Hole;
 
   Channel_Normal.ident = StdFile;
   Channel_Normal.out.file = stdout;
   Channel_Warn = Channel_Default = Channel_Normal;
+
+  const char *val = getenv(DEBUGLOG);
+  if (val) {
+    if (!strcmp(val, "true") || !strcmp(val, "1")) {
+      Channel_Debug = Channel_Normal;
+    } else {
+      Channel_Debug = Black_Hole;
+    }
+  } else {
+    Channel_Debug = Black_Hole;
+  }
 
   Channel_Alert.ident = StdFile;
   Channel_Alert.out.file = stderr;
@@ -294,21 +305,15 @@ char *sprintfCSI(const char *format, const struct CSI *csi, size_t limit)
   // FIXME
   if (csi == NULL || limit == 0) { csi = &reset; limit = 1; }
   size_t formatlen = strlen(format);
-  size_t size = formatlen;
-  char * buf = calloc(size, sizeof(char));
-  size_t bufsize = 0;
   const char *cur = format;
   size_t len = 0;
+
+  String builder = StringBuild(NULL, 0);
   while (cur + len < format + formatlen) {
     char * sub = NULL;
     if (cur[len] == '{') {
       if (len > 0) {
-        if (len + bufsize >= size) {
-          size += size;
-          buf = reallocarray(buf, size, sizeof(char));
-        }
-        memmove(buf+bufsize, cur, len);
-        bufsize += len;
+        StringWrite(builder, cur, Relative, 0, len);
         cur += len;
         len = 0;
       }
@@ -316,26 +321,16 @@ char *sprintfCSI(const char *format, const struct CSI *csi, size_t limit)
       if (ix != -1) {
         cur = sub;
         sub = CSIformat(csi[((size_t)ix)>=limit?0:ix], &len);
-        if (len + bufsize >= size) {
-          size += size;
-          buf = reallocarray(buf, size, sizeof(char));
-        }
-        memmove(buf+bufsize, sub, len);
-        bufsize += len;
+        StringWrite(builder, sub, Relative, 0, len);
         free(sub);
         len = 0;
       }
     } else len ++;
   }
-  if (len > 0) {
-    if (len + bufsize >= size) {
-        size += size;
-        buf = reallocarray(buf, size, sizeof(char));
-    }
-    memmove(buf+bufsize, cur, len);
-    bufsize += len;
-  }
-  buf = reallocarray(buf, bufsize+1, sizeof(char));
+  if (len > 0)
+    StringWrite(builder, cur, Relative, 0, len);
+  char *buf = StringDump(builder, Text, 0, NULL);
+  StringFree(builder);
   return buf;
 }
 

@@ -1,13 +1,13 @@
 cmake_minimum_required(VERSION 3.15)
 
-project(Dtool VERSION 0.2.0 LANGUAGES C)
+project(Dtool VERSION 0.3.0 LANGUAGES C)
 set(CMAKE_C_STANDARD_REQUIRED True)
 set(CMAKE_C_STANDARD 11)
 
 configure_file(dtool.h.in dtool.h)
 include_directories(${CMAKE_CURRENT_BINARY_DIR} . util)
 
-set(CORE command.c elf.c pkg.c disas.c vara.c log.c)
+set(CORE command.c elf.c pkg.c disas.c vara.c log.c dynamix.c)
 list(APPEND CORE util/file.c)
 
 add_link_options(-ldl -lcapstone)
