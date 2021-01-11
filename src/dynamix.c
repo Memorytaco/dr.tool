@@ -1,9 +1,16 @@
 #include "dynamix.h"
 
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
 #include <assert.h>
+
+/*
+ * ***************************
+ *       Dynamix String
+ * ***************************
+ */
 
 struct string {
   char * strbuf;
@@ -167,4 +174,69 @@ Size StringLen(String builder)
 {
   if (builder == NULL) return 0;
   return builder->cursor;
+}
+
+/*
+ * **************************
+ *        Enumeration
+ * **************************
+ */
+
+USERFUNC void FreeITEM(ITEM it)
+{
+  if (it == NULL) return;
+  if (it != NULL) free(it);
+  return;
+}
+
+
+USERFUNC ITEM EBuildITEM(ITEM pre, void* data, enum ITEMType indicator)
+{
+  if (indicator == ITEMNONE) {
+    return NULL;
+  }
+
+  if (pre == NULL) {
+    pre = calloc(sizeof(struct ITEM), 1);
+  }
+  pre->data = data;
+  pre->index ++;
+  return pre;
+}
+
+USERFUNC ITEM EnumNext(Enumeration e)
+{
+  ITEM i = e->next(e->source, e->item);
+  if (i != NULL) e->item = i;
+  return i;
+}
+
+ITEM StringNext(void *source, ITEM pre)
+{
+  Size idx = 0;
+  if (pre != NULL) {
+    idx = pre->index;
+  }
+
+  if (idx >= StringLen(source)) {
+    return EBuildITEM(pre, NULL, ITEMNONE);
+  }
+
+  char* c = (char*)StringIndex(source, idx, NULL);
+  return EBuildITEM(pre, c, ITEMINDEX);
+}
+
+Enumeration EnumerateString(String s)
+{
+  if (s == NULL) {
+    return NULL;
+  }
+
+  Enumeration e = calloc(sizeof(struct Enumeration), 1);
+  e->source = s;
+  e->type = EnumIndex;
+  e->next = StringNext;
+  e->count = StringLen(s);
+  EnumNext(e);
+  return e;
 }
