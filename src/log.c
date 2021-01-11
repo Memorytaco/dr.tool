@@ -17,10 +17,7 @@ static struct ChannelEntity {
   enum ChannelOutput ident;
   union ChannelBuf {
     FILE * file;
-    struct StdBuf {
-      char * buf;
-      size_t size;
-    } stdbuf;
+    String buffer;
   } out;
 } Channel_Default
 , Channel_Normal
